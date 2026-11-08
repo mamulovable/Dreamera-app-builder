@@ -1,0 +1,1 @@
+ALTER TABLE "app_builds" ADD COLUMN "eas_run_id" text;

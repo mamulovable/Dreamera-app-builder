@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>App preview</title>
+    <style>
+      html,
+      body,
+      #root {
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: var(--color-background, #ffffff);
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #root {
+        display: flex;
+      }
+      /* Scrolls like a phone: no scrollbars, and reaching the end doesn't scroll the workspace behind. */
+      * {
+        scrollbar-width: none;
+      }
+      html,
+      body {
+        overscroll-behavior: none;
+      }
+      .af-screen {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        background: var(--color-background);
+      }
+      .af-screen > * {
+        flex: 1;
+      }
+      .af-push {
+        animation: af-push 280ms cubic-bezier(0.32, 0.72, 0, 1);
+      }
+      @keyframes af-push {
+        from {
+          transform: translateX(100%);
+        }
+      }
+      [data-interactive="false"] * {
+        animation: none !important;
+        transition: none !important;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .af-push {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script src="/preview-runtime/runtime.js"></script>
+  </body>
+</html>
