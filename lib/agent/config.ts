@@ -3,17 +3,18 @@ import { setDefaultOpenAIClient, setOpenAIAPI, setTracingDisabled } from "@opena
 
 import { PLANS } from "@/lib/plans"
 
-// The OpenAI Agents SDK talks to Anthropic's OpenAI-compatible endpoint
-// (https://api.anthropic.com/v1/). It serves Chat Completions (not the
-// Responses API), and traces would go to OpenAI's dashboard, so both are
-// configured here once per process.
+// The OpenAI Agents SDK talks to Google AI's OpenAI-compatible Gemini endpoint.
+// It serves Chat Completions (not the Responses API), and traces would go to
+// OpenAI's dashboard, so both are configured here once per process.
 
-const DEFAULT_MODEL = "claude-sonnet-5-5"
+const GEMINI_MODEL = "gemini-3.8-flash"
+const GOOGLE_AI_BASE_URL =
+  process.env.GOOGLE_AI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta/openai/"
 
-/** Model for understanding the request, planning, and chatting. */
-export const PLANNER_MODEL = process.env.AI_MODEL || DEFAULT_MODEL
-/** Model for writing screen code. */
-export const BUILDER_MODEL = process.env.AI_BUILDER_MODEL || PLANNER_MODEL
+/** Model for understanding the request, planning, and chatting. Gemini 3.8 Flash for now. */
+export const PLANNER_MODEL = GEMINI_MODEL
+/** Model for writing screen code. Same model as the planner for now. */
+export const BUILDER_MODEL = GEMINI_MODEL
 
 /** The most screens a plan can have on any AppForge plan, even when the person asks for more. */
 export const MAX_PLAN_SCREENS = PLANS.pro.maxScreens
@@ -28,7 +29,7 @@ let configured = false
 
 const AI_ATTEMPTS = 5
 
-/** CloudHike answers 503 while a stream is busy and 429 past 20 requests a minute. Wait, then try again. */
+/** Google AI answers 429 when the rate limit is hit and 503 while it is busy. Wait, then try again. */
 async function fetchWithBackoff(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   for (let attempt = 0; attempt < AI_ATTEMPTS; attempt++) {
     const response = await fetch(input, init)
@@ -37,21 +38,28 @@ async function fetchWithBackoff(input: RequestInfo | URL, init?: RequestInit): P
     const retryAfter = Number(response.headers.get("retry-after"))
     const waitMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : (attempt + 1) * 8000
     await response.arrayBuffer().catch(() => undefined)
-    console.warn(`CloudHike AI returned ${response.status}. Waiting ${Math.round(waitMs / 1000)}s, then retrying.`)
+    console.warn(`Google AI returned ${response.status}. Waiting ${Math.round(waitMs / 1000)}s, then retrying.`)
     await new Promise((resolve) => setTimeout(resolve, waitMs))
   }
-  throw new Error("CloudHike AI did not answer.")
+  throw new Error("Google AI did not answer.")
+}
+
+function googleAiApiKey() {
+  const key = process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY
+  const trimmed = key?.trim()
+  return trimmed ? trimmed : undefined
 }
 
 export function configureAgents() {
   if (configured) return
-  if (!process.env.AI_BASE_URL || !process.env.AI_API_KEY) {
-    throw new Error("AI_BASE_URL and AI_API_KEY must be set to run the AppForge agent.")
+  const apiKey = googleAiApiKey()
+  if (!apiKey) {
+    throw new Error("GOOGLE_AI_API_KEY must be set to run the AppForge agent.")
   }
   setDefaultOpenAIClient(
     new OpenAI({
-      baseURL: process.env.AI_BASE_URL,
-      apiKey: process.env.AI_API_KEY,
+      baseURL: GOOGLE_AI_BASE_URL,
+      apiKey,
       maxRetries: 0,
       fetch: fetchWithBackoff,
     })
