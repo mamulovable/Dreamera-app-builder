@@ -5,7 +5,7 @@ import { buildEvents, builds, db, projects, screens, type Project } from "@/db"
 import { toProjectScreen, type AgentEvent, type AppPlan } from "@/lib/agent-protocol"
 import { prepareScreens } from "@/lib/agent/builder"
 import { refundCharge, refundUnfinishedBuild, type BuildCharge } from "@/lib/billing/credits"
-import { getJobRun, jobsCanReachApp, jobsEndpointUp, startJobRun } from "@/lib/jobs"
+import { getJobRun, jobCallbackBase, jobsEndpointUp, startJobRun } from "@/lib/jobs"
 
 export const BUILD_WORKER_PATH = "/api/jobs/build-step"
 
@@ -121,7 +121,13 @@ export async function activeBuild(projectId: string) {
  * Queues a build of `plan`, or returns the one already running. `firstEvents` open its stream.
  * `charge` is what was already paid for it. Picking up an interrupted build has none, as that was paid for when it began.
  */
-export async function startBuild(project: Project, plan: AppPlan, firstEvents: AgentEvent[] = [], charge?: BuildCharge) {
+export async function startBuild(
+  project: Project,
+  plan: AppPlan,
+  firstEvents: AgentEvent[] = [],
+  charge?: BuildCharge,
+  origin?: string | null
+) {
   // Earlier builds' events are only useful while someone can still be reading them.
   await db.delete(builds).where(and(eq(builds.projectId, project.id), eq(builds.status, "finished")))
   const lease = randomUUID()
@@ -145,31 +151,28 @@ export async function startBuild(project: Project, plan: AppPlan, firstEvents: A
     log.emit({ type: "screens", screens: rows.map(toProjectScreen) })
     await log.flush()
 
-    // An offline tunnel still "can" be addressed, but Jobs gets a 404 before this
-    // app runs, so the builder model is never called and CloudHike has no log for it.
-    const tunnelUp = jobsCanReachApp() && (await jobsEndpointUp())
-    if (tunnelUp) {
-      const jobId = await startJobRun({ path: BUILD_WORKER_PATH, body: { buildId: build.id, step: 1 }, retries: JOB_RETRIES })
-      // The worker may have claimed the step already, and it records the same run.
-      await db.update(builds).set({ jobId }).where(eq(builds.id, build.id))
-    } else if (process.env.NODE_ENV === "production") {
-      throw new Error(
-        jobsCanReachApp()
-          ? "CloudHike Jobs can't reach this app. The public URL is offline."
-          : "CloudHike Jobs can't reach this app. Set JOBS_PUBLIC_URL to its public URL."
-      )
-    } else {
+    // The browser's host is the deployed site. JOBS_PUBLIC_URL is only for localhost,
+    // and it is often a tunnel, so a deploy must not send its build there.
+    const base = jobCallbackBase(origin)
+    const runOnThisServer = process.env.NODE_ENV !== "production" && !(base && (await jobsEndpointUp(base)))
+    if (runOnThisServer) {
       console.info(
-        jobsCanReachApp()
+        base
           ? "CloudHike Jobs can't reach the public URL (the tunnel is offline). Running this build in the dev server so the builder model still calls CloudHike."
           : "CloudHike Jobs can't reach localhost. Running this build in the dev server."
       )
       const { startLocalBuild } = await import("@/lib/agent/local-build")
       startLocalBuild(build.id)
+    } else {
+      if (!base) throw new Error("CloudHike Jobs can't reach this app. Set JOBS_PUBLIC_URL to its public URL.")
+      const jobId = await startJobRun({ path: BUILD_WORKER_PATH, body: { buildId: build.id, step: 1 }, retries: JOB_RETRIES, base })
+      // The worker may have claimed the step already, and it records the same run.
+      await db.update(builds).set({ jobId }).where(eq(builds.id, build.id))
     }
   } catch (error) {
     console.error("Starting the build failed", error)
-    await failBuild(build.id, "Couldn't start the build. Please try again.")
+    const detail = error instanceof Error ? error.message.trim() : ""
+    await failBuild(build.id, detail.slice(0, 280) || "Couldn't start the build. Please try again.")
   }
   return build
 }
@@ -182,10 +185,15 @@ export async function claimBuildStep(buildId: string, step: number, jobId: strin
   return takeLease(buildId, sql`${builds.step} <= ${step}`, { step, ...(jobId ? { jobId } : {}) })
 }
 
-/** Queues the step after `step`. */
-export async function queueNextStep(buildId: string, step: number) {
+/** Queues the step after `step`, calling back the same host that ran this step. */
+export async function queueNextStep(buildId: string, step: number, origin?: string | null) {
   const next = step + 1
-  const jobId = await startJobRun({ path: BUILD_WORKER_PATH, body: { buildId, step: next }, retries: JOB_RETRIES })
+  const jobId = await startJobRun({
+    path: BUILD_WORKER_PATH,
+    body: { buildId, step: next },
+    retries: JOB_RETRIES,
+    base: jobCallbackBase(origin),
+  })
   await db
     .update(builds)
     .set({ jobId, step: next })

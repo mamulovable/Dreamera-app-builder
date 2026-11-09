@@ -24,22 +24,57 @@ function jobsPublicBase() {
   return process.env.JOBS_PUBLIC_URL || process.env.NEXT_PUBLIC_APP_URL || ""
 }
 
-/** Jobs can call this app only at a public address, with both credentials set. */
-export function jobsCanReachApp() {
-  const base = jobsPublicBase()
-  if (!process.env.JOBS_API_URL || !process.env.JOBS_API_KEY) return false
-  return Boolean(base && !/^https?:\/\/(localhost|127\.0\.0\.1)\b/.test(base))
+/** Localhost is the dev machine. Jobs cannot call it, and a tunnel address is not the deployed site. */
+export function isPublicAppUrl(base: string | null | undefined) {
+  if (!base) return false
+  try {
+    return !/^(localhost|127\.0\.0\.1)$/i.test(new URL(base).hostname)
+  } catch {
+    return false
+  }
+}
+
+/** The host the browser or Jobs worker actually called, so a deploy is not sent back to a local tunnel. */
+export function originFromRequest(request: Request) {
+  const forwarded = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim()
+  const host = forwarded || request.headers.get("host")?.split(",")[0]?.trim()
+  if (!host) {
+    try {
+      return new URL(request.url).origin
+    } catch {
+      return null
+    }
+  }
+  const local = /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(host)
+  const proto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || (local ? "http" : "https")
+  return `${proto}://${host}`
 }
 
 /**
- * Whether Jobs can actually open the public URL right now. A configured tunnel
- * that is offline answers 404 (ngrok ERR_NGROK_3200) and the build never starts,
- * so the builder model is never called and never shows up in the CloudHike log.
+ * Where a build step should be called. The request's own public host wins, so a
+ * deployed app calls itself. `JOBS_PUBLIC_URL` is only the fallback for localhost.
  */
-export async function jobsEndpointUp() {
-  if (!jobsCanReachApp()) return false
+export function jobCallbackBase(origin?: string | null) {
+  if (isPublicAppUrl(origin)) return origin as string
+  const base = jobsPublicBase()
+  return isPublicAppUrl(base) ? base : ""
+}
+
+/** Jobs can call this app only at a public address, with both credentials set. */
+export function jobsCanReachApp() {
+  if (!process.env.JOBS_API_URL || !process.env.JOBS_API_KEY) return false
+  return isPublicAppUrl(jobsPublicBase())
+}
+
+/**
+ * Whether Jobs can open `base` right now. An offline tunnel answers 404
+ * (ngrok ERR_NGROK_3200). Used in development only: production must not refuse
+ * to start just because this server cannot fetch its own homepage.
+ */
+export async function jobsEndpointUp(base = jobsPublicBase()) {
+  if (!isPublicAppUrl(base)) return false
   try {
-    const response = await fetch(new URL("/", jobsPublicBase()), {
+    const response = await fetch(new URL("/", base), {
       method: "GET",
       redirect: "follow",
       signal: AbortSignal.timeout(8000),
@@ -54,20 +89,29 @@ export async function jobsEndpointUp() {
 }
 
 /** Where Jobs reaches this app. It refuses localhost, so local development needs a tunnel. */
-function publicUrl(path: string) {
-  const base = process.env.JOBS_PUBLIC_URL || process.env.NEXT_PUBLIC_APP_URL
-  if (!base || /^https?:\/\/(localhost|127\.0\.0\.1)\b/.test(base)) {
-    throw new Error(`CloudHike Jobs can't reach "${base}". Set JOBS_PUBLIC_URL to this app's public URL or a tunnel to it.`)
+function publicUrl(path: string, base = jobsPublicBase()) {
+  if (!isPublicAppUrl(base)) {
+    throw new Error(`CloudHike Jobs can't reach "${base || "this app"}". Set JOBS_PUBLIC_URL to this app's public URL or a tunnel to it.`)
   }
   return new URL(path, base).toString()
 }
 
 /** Starts a run that POSTs `body` to `path` on this app. Results are read by polling, so no webhook is sent. */
-export async function startJobRun({ path, body, retries }: { path: string; body: unknown; retries: number }) {
+export async function startJobRun({
+  path,
+  body,
+  retries,
+  base,
+}: {
+  path: string
+  body: unknown
+  retries: number
+  base?: string
+}) {
   const response = await jobsRequest("/runs", {
     method: "POST",
     body: JSON.stringify({
-      url: publicUrl(path),
+      url: publicUrl(path, base),
       method: "POST",
       body,
       retries,

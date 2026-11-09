@@ -9,6 +9,7 @@ import { runPlannerTurn } from "@/lib/agent/planner"
 import { getRun, startRun, type ProjectRun } from "@/lib/agent/runs"
 import { assertCanUseAgent, chargeForBuild, PlanLimitError, planLimitResponse, refundCharge, type BuildCharge } from "@/lib/billing/credits"
 import { MAX_PROMPT_LENGTH } from "@/lib/projects"
+import { originFromRequest } from "@/lib/jobs"
 import { getCurrentUser, type SessionUser } from "@/lib/session"
 
 // Planning takes seconds. Following a build's stream can take a few minutes. Hobby caps this at 300 seconds.
@@ -39,6 +40,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
 
   const body = (await request.json().catch(() => null)) as AgentRequest | null
   if (!body || !["start", "message", "confirm"].includes(body.action)) return error("Invalid request.", 400)
+  const origin = originFromRequest(request)
 
   const build = await activeBuild(project.id)
   if (build) {
@@ -64,7 +66,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
     }
     const element = readElementContext(body.element)
     await db.insert(messages).values({ projectId: project.id, role: "user", content: element ? messageWithElement(content, element) : content })
-    return streamRun(startRun(project.id, (run) => respond(run, project, user)), request)
+    return streamRun(startRun(project.id, (run) => respond(run, project, user, origin)), request)
   }
 
   if (body.action === "confirm") {
@@ -88,13 +90,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
         content: `On it! I'll build the ${plan.screens.length} screens one at a time, starting with ${plan.screens[0].name}.`,
       })
       .returning({ id: messages.id, role: messages.role, content: messages.content, plan: messages.plan })
-    const started = await startBuild(project, plan, [{ type: "message", message: reply }], charge)
+    const started = await startBuild(project, plan, [{ type: "message", message: reply }], charge, origin)
     return streamBuild(started.id, request)
   }
 
   // "start": pick up wherever the project is.
   if (project.status === "building" && project.plan) {
-    const started = await startBuild(project, project.plan)
+    const started = await startBuild(project, project.plan, [], undefined, origin)
     return streamBuild(started.id, request)
   }
   const [last] = await db
@@ -104,7 +106,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
     .orderBy(desc(messages.createdAt))
     .limit(1)
   if (last?.role === "user") {
-    return streamRun(startRun(project.id, (run) => respond(run, project, user)), request)
+    return streamRun(startRun(project.id, (run) => respond(run, project, user, origin)), request)
   }
   return streamEvents([{ type: "done" }])
 }
@@ -119,7 +121,7 @@ function readElementContext(value: unknown): ElementContext | null {
 }
 
 /** One planner turn, then the build if the person confirmed the plan or asked to change the built app. */
-async function respond(run: ProjectRun, project: Project, user: SessionUser) {
+async function respond(run: ProjectRun, project: Project, user: SessionUser, origin: string | null) {
   const assets = await db
     .select({ fileName: projectAssets.fileName })
     .from(projectAssets)
@@ -147,7 +149,7 @@ async function respond(run: ProjectRun, project: Project, user: SessionUser) {
       })
     : plan!
   // Keeps this request's stream going through the build. `startRun` sends the final `done`.
-  const build = await startBuild(project, nextPlan, changes ? [{ type: "plan", plan: nextPlan }] : [], charge)
+  const build = await startBuild(project, nextPlan, changes ? [{ type: "plan", plan: nextPlan }] : [], charge, origin)
   for await (const event of followBuild(build.id)) {
     if (event.type !== "done") run.emit(event)
   }

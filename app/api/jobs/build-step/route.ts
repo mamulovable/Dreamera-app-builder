@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm"
 import { db, projects } from "@/db"
 import { runBuildStep } from "@/lib/agent/builder"
 import { BuildLostError, claimBuildStep, finishBuild, queueNextStep } from "@/lib/agent/builds"
-import { verifyJobSignature } from "@/lib/jobs"
+import { originFromRequest, verifyJobSignature } from "@/lib/jobs"
 
 // Jobs decides when a step has run too long. Hobby caps this at 300 seconds, which matches JOBS_TIMEOUT_SECONDS.
 export const maxDuration = 300
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     const [project] = await db.select().from(projects).where(eq(projects.id, build.projectId))
     const more = await runBuildStep(log, project)
     await log.flush()
-    if (more) await queueNextStep(buildId, step)
+    if (more) await queueNextStep(buildId, step, originFromRequest(request))
     else await finishBuild(buildId, log)
     return NextResponse.json({ more })
   } catch (error) {
