@@ -86,7 +86,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `NEXT_PUBLIC_APP_URL` | This site's address |
 | `DATABASE_URL`, `DIRECT_URL` | PostgreSQL |
 | `AUTH_URL`, `AUTH_PUBLISHABLE_KEY`, `AUTH_SECRET_KEY` | Sign-in, through CloudHike Auth |
-| `GOOGLE_AI_API_KEY` | The AI agents. Planner and builder use Gemini 3.8 Flash |
+| `AI_BASE_URL`, `AI_API_KEY` | The AI agents, through CloudHike |
 | `JOBS_API_URL`, `JOBS_API_KEY` | Background screen generation, through CloudHike Jobs |
 | `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Files attached to prompts, through CloudHike Storage |
 
@@ -99,7 +99,9 @@ Open [http://localhost:3000](http://localhost:3000).
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | Push to GitHub |
 | `IMAGEKIT_ENABLED`, `IMAGEKIT_PRIVATE_KEY`, `IMAGEKIT_URL_ENDPOINT` | AI images. Without them, apps use placeholder images |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRO_PRICE_ID` | Pro subscriptions |
-| `GOOGLE_AI_BASE_URL` | Optional. Defaults to Google's OpenAI-compatible Gemini endpoint |
+| `GOOGLE_AI_API_KEY` | Gemini fallback when a CloudHike call fails |
+| `AI_MODEL`, `AI_BUILDER_MODEL` | Planner and builder models on CloudHike. Planner defaults to `claude-sonnet-5-5` |
+| `AI_FALLBACK_MODEL` | Fallback model. Defaults to `gemini-3.8-flash` |
 | `DEFAULT_SCREEN_COUNT` | Most screens in a plan unless someone asks for more. Defaults to 3 |
 
 Publishing doesn't need a server-side Expo key, because each person connects their own Expo access token.
