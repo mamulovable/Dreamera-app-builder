@@ -5,7 +5,7 @@ import { buildEvents, builds, db, projects, screens, type Project } from "@/db"
 import { toProjectScreen, type AgentEvent, type AppPlan } from "@/lib/agent-protocol"
 import { prepareScreens } from "@/lib/agent/builder"
 import { refundCharge, refundUnfinishedBuild, type BuildCharge } from "@/lib/billing/credits"
-import { getJobRun, jobsCanReachApp, startJobRun } from "@/lib/jobs"
+import { getJobRun, jobsCanReachApp, jobsEndpointUp, startJobRun } from "@/lib/jobs"
 
 export const BUILD_WORKER_PATH = "/api/jobs/build-step"
 
@@ -145,14 +145,25 @@ export async function startBuild(project: Project, plan: AppPlan, firstEvents: A
     log.emit({ type: "screens", screens: rows.map(toProjectScreen) })
     await log.flush()
 
-    if (jobsCanReachApp()) {
+    // An offline tunnel still "can" be addressed, but Jobs gets a 404 before this
+    // app runs, so the builder model is never called and CloudHike has no log for it.
+    const tunnelUp = jobsCanReachApp() && (await jobsEndpointUp())
+    if (tunnelUp) {
       const jobId = await startJobRun({ path: BUILD_WORKER_PATH, body: { buildId: build.id, step: 1 }, retries: JOB_RETRIES })
       // The worker may have claimed the step already, and it records the same run.
       await db.update(builds).set({ jobId }).where(eq(builds.id, build.id))
     } else if (process.env.NODE_ENV === "production") {
-      throw new Error("CloudHike Jobs can't reach this app. Set JOBS_PUBLIC_URL to its public URL.")
+      throw new Error(
+        jobsCanReachApp()
+          ? "CloudHike Jobs can't reach this app. The public URL is offline."
+          : "CloudHike Jobs can't reach this app. Set JOBS_PUBLIC_URL to its public URL."
+      )
     } else {
-      console.info("CloudHike Jobs can't reach localhost. Running this build in the dev server.")
+      console.info(
+        jobsCanReachApp()
+          ? "CloudHike Jobs can't reach the public URL (the tunnel is offline). Running this build in the dev server so the builder model still calls CloudHike."
+          : "CloudHike Jobs can't reach localhost. Running this build in the dev server."
+      )
       const { startLocalBuild } = await import("@/lib/agent/local-build")
       startLocalBuild(build.id)
     }
@@ -223,7 +234,11 @@ async function reconcileBuild(buildId: string) {
   const stalled = job?.status === "succeeded" && Date.now() - build.updatedAt.getTime() > STALLED_MS
   if (job?.status === "failed" || job?.status === "cancelled" || stalled) {
     console.error(`Build ${buildId}: job ${job.id} ended as ${job.status}`, job.error)
-    await failBuild(buildId, FAILED_MESSAGE, build.jobId)
+    const message =
+      job.status === "failed" && job.error
+        ? `The build worker couldn't finish this step (${job.error}). Say "try again" and I'll pick up where it left off.`
+        : FAILED_MESSAGE
+    await failBuild(buildId, message, build.jobId)
   }
   return true
 }

@@ -20,11 +20,37 @@ function jobsRequest(path: string, init?: RequestInit) {
   })
 }
 
+function jobsPublicBase() {
+  return process.env.JOBS_PUBLIC_URL || process.env.NEXT_PUBLIC_APP_URL || ""
+}
+
 /** Jobs can call this app only at a public address, with both credentials set. */
 export function jobsCanReachApp() {
-  const base = process.env.JOBS_PUBLIC_URL || process.env.NEXT_PUBLIC_APP_URL
+  const base = jobsPublicBase()
   if (!process.env.JOBS_API_URL || !process.env.JOBS_API_KEY) return false
   return Boolean(base && !/^https?:\/\/(localhost|127\.0\.0\.1)\b/.test(base))
+}
+
+/**
+ * Whether Jobs can actually open the public URL right now. A configured tunnel
+ * that is offline answers 404 (ngrok ERR_NGROK_3200) and the build never starts,
+ * so the builder model is never called and never shows up in the CloudHike log.
+ */
+export async function jobsEndpointUp() {
+  if (!jobsCanReachApp()) return false
+  try {
+    const response = await fetch(new URL("/", jobsPublicBase()), {
+      method: "GET",
+      redirect: "follow",
+      signal: AbortSignal.timeout(8000),
+      headers: { "ngrok-skip-browser-warning": "1" },
+    })
+    if (!response.ok) return false
+    const text = await response.text()
+    return !text.includes("ERR_NGROK")
+  } catch {
+    return false
+  }
 }
 
 /** Where Jobs reaches this app. It refuses localhost, so local development needs a tunnel. */

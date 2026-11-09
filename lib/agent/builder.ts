@@ -100,6 +100,7 @@ export async function runBuildStep(log: BuildLog, project: Project): Promise<boo
 
   const plan = project.plan
   if (!plan) throw new Error(`Project ${project.id} has no plan to build.`)
+  console.info(`Build ${log.buildId} is calling ${BUILDER_MODEL}.`)
 
   if (!plan.themePackage || !plan.collections) {
     log.emit({ type: "status", label: "Designing your themes and sample data…" })
