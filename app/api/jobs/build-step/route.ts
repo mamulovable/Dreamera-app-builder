@@ -6,8 +6,8 @@ import { runBuildStep } from "@/lib/agent/builder"
 import { BuildLostError, claimBuildStep, finishBuild, queueNextStep } from "@/lib/agent/builds"
 import { verifyJobSignature } from "@/lib/jobs"
 
-// Jobs decides when a step has run too long; this only has to outlast its longest timeout on the plan in use.
-export const maxDuration = 800
+// Jobs decides when a step has run too long. Hobby caps this at 300 seconds, which matches JOBS_TIMEOUT_SECONDS.
+export const maxDuration = 300
 
 /**
  * Runs one step of a build. Called by CloudHike Jobs, not the browser. An error

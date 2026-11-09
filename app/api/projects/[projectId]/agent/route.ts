@@ -11,8 +11,8 @@ import { assertCanUseAgent, chargeForBuild, PlanLimitError, planLimitResponse, r
 import { MAX_PROMPT_LENGTH } from "@/lib/projects"
 import { getCurrentUser, type SessionUser } from "@/lib/session"
 
-// Planning takes seconds. Following a build's stream can take a few minutes, and the build runs on CloudHike Jobs.
-export const maxDuration = 800
+// Planning takes seconds. Following a build's stream can take a few minutes. Hobby caps this at 300 seconds.
+export const maxDuration = 300
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
