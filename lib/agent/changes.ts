@@ -105,13 +105,18 @@ export function planAppChanges(
   }
 
   // A tab app from before the shared layout draws the bar in its screens, so a layout would be a second bar.
+  const nextNavigation = request.navigation ?? plan.navigation
   const drawsOwnTabBars = plan.navigation === "tabs" && !plan.screens.some((screen) => screen.tab)
-  if ((request.navigation ?? plan.navigation) === "stack" || drawsOwnTabBars) {
+  const usesSharedNav =
+    nextNavigation === "tabs" || nextNavigation === "top-nav" || nextNavigation === "sidebar"
+  if (nextNavigation === "stack" || drawsOwnTabBars) {
     next = next.map((screen) => ({ ...screen, tab: null }))
-  } else {
+  } else if (usesSharedNav) {
     const tabs = next.filter((screen) => screen.tab).length
     if (tabs < MIN_TABS || tabs > MAX_TABS) {
-      return `That leaves ${tabs} tabs. Tab navigation has between ${MIN_TABS} and ${MAX_TABS}, so set tab on the top-level screens, or use stack navigation.`
+      const kind =
+        nextNavigation === "tabs" ? "tabs" : nextNavigation === "sidebar" ? "sidebar items" : "top-nav items"
+      return `That leaves ${tabs} ${kind}. Shared navigation has between ${MIN_TABS} and ${MAX_TABS} top-level items, so set tab on those pages, or pick a different navigation style.`
     }
   }
 

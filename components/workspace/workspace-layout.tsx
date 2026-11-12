@@ -201,15 +201,21 @@ export function WorkspaceLayout({
     runningPlan?.collections ?? null,
     runningPlan?.backend ?? null,
     runningPlan?.components ?? null,
+    runningPlan?.navigation ?? null,
+    runningPlan?.screens.map((s) => [s.id, s.tab]) ?? null,
     runningScreens.map((s) => [s.slug, s.position, s.status, isRunnable(s) ? s.code : null]),
   ])
-  const app = React.useMemo(() => previewProject(runningPlan, runningScreens), [runnableKey])
+  const app = React.useMemo(
+    () => previewProject(runningPlan, runningScreens, project.platform),
+    [runnableKey, project.platform]
+  )
   const appFiles = React.useMemo(() => generatedAppFiles(agent.plan), [agent.plan])
   const syncing = agent.status === "building"
 
   const canvas = (
     <CanvasPanel
       projectId={project.id}
+      platform={project.platform}
       plan={agent.plan}
       screens={agent.screens}
       app={app}
@@ -222,6 +228,7 @@ export function WorkspaceLayout({
   const preview = (
     <PreviewPanel
       projectId={project.id}
+      platform={project.platform}
       plan={agent.plan}
       screens={agent.screens}
       app={app}
@@ -251,11 +258,11 @@ export function WorkspaceLayout({
           <ResizablePanel id="chat" defaultSize="24%" minSize={280} maxSize="40%">
             {chat}
           </ResizablePanel>
-          <ResizableHandle className="hover:bg-violet-300 data-[separator=active]:bg-violet-400" />
+          <ResizableHandle className="hover:bg-brand/40 data-[separator=active]:bg-brand" />
           <ResizablePanel id="canvas" defaultSize="46%" minSize={320}>
             {canvas}
           </ResizablePanel>
-          <ResizableHandle className="hover:bg-violet-300 data-[separator=active]:bg-violet-400" />
+          <ResizableHandle className="hover:bg-brand/40 data-[separator=active]:bg-brand" />
           <ResizablePanel id="preview" defaultSize="30%" minSize={340} maxSize="45%">
             {preview}
           </ResizablePanel>
@@ -288,7 +295,7 @@ export function WorkspaceLayout({
               className={cn(
                 "flex flex-col items-center gap-0.5 rounded-xl py-1.5 text-[11px] font-medium transition-colors",
                 mobileView === id
-                  ? "bg-violet-500/10 text-violet-700"
+                  ? "bg-brand/10 text-brand-dark"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >

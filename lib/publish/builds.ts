@@ -225,6 +225,9 @@ async function sendToExpo(project: Project, build: AppBuild, expoToken: string, 
 /** Saves the build and starts it on EAS. */
 export async function startBuild(project: Project, userId: number, format: AppBuildFormat, version: string): Promise<PublishResult> {
   const platform = FORMAT_PLATFORM[format]
+  if (project.platform === "web") {
+    throw new PublishBlockedError("Website projects publish as a website, not as an app store build.")
+  }
   if (project.platform !== "ios-android" && project.platform !== platform) {
     throw new PublishBlockedError(`This project was made for ${project.platform === "ios" ? "iOS" : "Android"} only.`)
   }

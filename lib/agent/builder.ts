@@ -7,7 +7,7 @@ import { mergePlan } from "@/lib/agent/changes"
 import { generateComponents, writeComponent } from "@/lib/agent/components"
 import { BUILDER_MODEL, configureAgents } from "@/lib/agent/config"
 import { changeCollections, generateFoundation } from "@/lib/agent/foundation"
-import { BUILDER_INSTRUCTIONS, builderPrompt } from "@/lib/agent/instructions"
+import { BUILDER_INSTRUCTIONS, WEB_BUILDER_INSTRUCTIONS, builderPrompt } from "@/lib/agent/instructions"
 import { BuildLostError, type BuildLog } from "@/lib/agent/builds"
 import { fatalScreenProblem, screenProblems, visibleCode } from "@/lib/agent/validate-screen"
 import { refundUnfinishedBuild } from "@/lib/billing/credits"
@@ -18,6 +18,12 @@ const builderAgent = new Agent({
   name: "AppForge Screen Builder",
   model: BUILDER_MODEL,
   instructions: BUILDER_INSTRUCTIONS,
+})
+
+const webBuilderAgent = new Agent({
+  name: "AppForge Page Builder",
+  model: BUILDER_MODEL,
+  instructions: WEB_BUILDER_INSTRUCTIONS,
 })
 
 // Keeps the style reference prompt small.
@@ -187,7 +193,8 @@ export async function runBuildStep(log: BuildLog, project: Project): Promise<boo
 
     /** Streams one attempt at the file to the client and returns the finished code. */
     const generate = async (input: AgentInputItem[], status: string) => {
-      const result = await run(builderAgent, input, { stream: true, signal: log.signal })
+      const agent = project.platform === "web" ? webBuilderAgent : builderAgent
+      const result = await run(agent, input, { stream: true, signal: log.signal })
       let raw = ""
       let shown = ""
       for await (const event of result) {

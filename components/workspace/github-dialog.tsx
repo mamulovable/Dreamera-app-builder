@@ -171,7 +171,7 @@ export function GitHubDialog({
     >
       <DialogContent className="gap-5 rounded-3xl p-6 sm:max-w-md" showCloseButton={!pushing}>
         <DialogHeader className="flex-row items-center gap-3">
-          <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-100 to-fuchsia-100 text-violet-600">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-brand/15 to-brand-accent/15 text-brand">
             <GithubIcon className="size-5" />
           </span>
           <div className="min-w-0 space-y-0.5">
@@ -203,7 +203,7 @@ export function GitHubDialog({
           </p>
         ) : status && !status.available ? (
           <p role="status" className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
-            GitHub isn't set up on this AppForge server yet.
+            GitHub isn't set up on this Dreamera server yet.
           </p>
         ) : showConnect ? (
           <ConnectView
@@ -235,7 +235,7 @@ export function GitHubDialog({
         ) : view.name === "pushing" ? (
           <div role="status" className="space-y-2">
             <p className="flex items-center gap-2 text-sm font-medium">
-              <Loader2Icon className="size-4 shrink-0 animate-spin text-violet-600" />
+              <Loader2Icon className="size-4 shrink-0 animate-spin text-brand" />
               <span className="min-w-0 truncate">{view.label}</span>
             </p>
             <Progress value={view.percent} aria-label="Push progress" />
@@ -265,7 +265,7 @@ function ConnectView({ projectId, notice }: { projectId: string; notice: string 
     <>
       <p className="flex gap-2 text-xs leading-relaxed text-muted-foreground">
         <ShieldCheckIcon className="mt-px size-3.5 shrink-0 text-emerald-600" />
-        You sign in on GitHub, and AppForge never sees your password. GitHub asks for access to your repositories, which AppForge only uses to list them and to push when you ask.
+        You sign in on GitHub, and Dreamera never sees your password. GitHub asks for access to your repositories, which Dreamera only uses to list them and to push when you ask.
       </p>
       {notice && (
         <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -433,11 +433,11 @@ function RepositoryPicker({
                   type="button"
                   disabled={pending !== null}
                   onClick={() => void choose({ repository: repo.fullName }, repo.fullName)}
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors hover:bg-violet-500/10 disabled:opacity-60"
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors hover:bg-brand/10 disabled:opacity-60"
                 >
                   <span className="min-w-0 flex-1 truncate">{repo.fullName}</span>
                   {repo.private && <LockIcon aria-label="Private" className="size-3.5 shrink-0 text-muted-foreground" />}
-                  {pending === repo.fullName && <Loader2Icon className="size-4 shrink-0 animate-spin text-violet-600" />}
+                  {pending === repo.fullName && <Loader2Icon className="size-4 shrink-0 animate-spin text-brand" />}
                 </button>
               </li>
             ))}
@@ -468,7 +468,7 @@ function ConfirmView({
           <GithubIcon className="size-4 shrink-0" />
           <span className="truncate">{repository.fullName}</span>
         </a>
-        <button type="button" onClick={onChange} className="shrink-0 text-xs font-medium text-violet-700 hover:underline">
+        <button type="button" onClick={onChange} className="shrink-0 text-xs font-medium text-brand-dark hover:underline">
           Change
         </button>
       </div>

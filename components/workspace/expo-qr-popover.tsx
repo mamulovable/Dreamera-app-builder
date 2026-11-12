@@ -33,7 +33,7 @@ export function ExpoQrPopover({ plan, screens }: { plan: AppPlan | null; screens
             variant="outline"
             size="sm"
             aria-label="Scan QR code to test on your device"
-            className="relative rounded-full border-violet-200 text-violet-700 hover:bg-violet-500/10 hover:text-violet-700 aria-expanded:bg-violet-500/10"
+            className="relative rounded-full border-brand/25 text-brand-dark hover:bg-brand/10 hover:text-brand-dark aria-expanded:bg-brand/10"
           />
         }
       >
@@ -58,7 +58,7 @@ export function ExpoQrPopover({ plan, screens }: { plan: AppPlan | null; screens
 
 function PopoverBody({ status, hasProject, retry }: { status: ExpoSnackStatus; hasProject: boolean; retry: () => void }) {
   if (!hasProject) {
-    return <Notice icon={<Spinner className="size-4 text-violet-600" />} text="Your QR code appears once the agent has built your first screen." />
+    return <Notice icon={<Spinner className="size-4 text-brand" />} text="Your QR code appears once the agent has built your first screen." />
   }
   if (status.state === "error") {
     return (
@@ -95,7 +95,7 @@ function PopoverBody({ status, hasProject, retry }: { status: ExpoSnackStatus; h
           href="https://expo.dev/go"
           target="_blank"
           rel="noreferrer"
-          className="text-xs font-medium text-violet-700 hover:underline"
+          className="text-xs font-medium text-brand-dark hover:underline"
         >
           Get Expo Go
         </a>

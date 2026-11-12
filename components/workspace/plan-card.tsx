@@ -40,12 +40,12 @@ export function PlanCard({
       aria-label={`App plan: ${plan.appName}`}
       className={cn(
         "w-full overflow-hidden rounded-2xl border bg-white shadow-[0_12px_32px_-20px_rgba(76,29,149,0.4)]",
-        state === "superseded" ? "border-border/60 opacity-70" : "border-violet-200/80"
+        state === "superseded" ? "border-border/60 opacity-70" : "border-brand/25/80"
       )}
     >
-      <div className="bg-linear-to-br from-indigo-50 via-violet-50 to-fuchsia-50 px-4 pt-3.5 pb-3">
+      <div className="bg-linear-to-br from-brand/5 via-white to-brand-accent/10 px-4 pt-3.5 pb-3">
         <div className="flex items-center justify-between gap-2">
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-violet-700 uppercase">
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-brand-dark uppercase">
             <LayoutListIcon className="size-3.5" />
             App plan
           </span>
@@ -68,7 +68,15 @@ export function PlanCard({
             ))}
           </span>
           <span className="capitalize">{plan.design.mode} mode</span>
-          <span>{plan.navigation === "tabs" ? "Tab navigation" : "Stack navigation"}</span>
+          <span>
+            {plan.navigation === "tabs"
+              ? "Tab navigation"
+              : plan.navigation === "top-nav"
+                ? "Top navigation"
+                : plan.navigation === "sidebar"
+                  ? "Sidebar navigation"
+                  : "Stack navigation"}
+          </span>
         </div>
       </div>
 
@@ -88,7 +96,7 @@ export function PlanCard({
             <ol className="mt-2.5 space-y-2.5">
               {plan.screens.map((screen, i) => (
                 <li key={screen.id} className="flex gap-2.5">
-                  <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-[11px] font-semibold text-violet-700">
+                  <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-brand/10 text-[11px] font-semibold text-brand-dark">
                     {i + 1}
                   </span>
                   <div className="min-w-0">
@@ -98,7 +106,7 @@ export function PlanCard({
                       <ul className="mt-1 space-y-0.5 text-xs text-foreground/80">
                         {screen.keyElements.map((element) => (
                           <li key={element} className="flex gap-1.5">
-                            <span aria-hidden className="mt-1.5 size-1 shrink-0 rounded-full bg-violet-400" />
+                            <span aria-hidden className="mt-1.5 size-1 shrink-0 rounded-full bg-brand" />
                             {element}
                           </li>
                         ))}
@@ -111,7 +119,7 @@ export function PlanCard({
             <button
               type="button"
               onClick={() => setShowDetails((s) => !s)}
-              className="mt-2.5 text-xs font-medium text-violet-700 hover:underline"
+              className="mt-2.5 text-xs font-medium text-brand-dark hover:underline"
             >
               {showDetails ? "Hide screen details" : "Show screen details"}
             </button>
@@ -124,7 +132,7 @@ export function PlanCard({
           <Button
             onClick={onConfirm}
             disabled={disabled}
-            className="h-9 w-full rounded-full bg-linear-to-r from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-md shadow-violet-500/30 hover:opacity-95"
+            className="h-9 w-full rounded-full bg-brand text-white shadow-md shadow-brand/30 hover:opacity-95"
           >
             <HammerIcon />
             Confirm & build {plan.screens.length} screens

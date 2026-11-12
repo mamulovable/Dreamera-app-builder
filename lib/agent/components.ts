@@ -6,6 +6,8 @@ import { BUILDER_MODEL } from "@/lib/agent/config"
 import {
   COMPONENT_INSTRUCTIONS,
   COMPONENT_LIBRARY_INSTRUCTIONS,
+  WEB_COMPONENT_INSTRUCTIONS,
+  WEB_COMPONENT_LIBRARY_INSTRUCTIONS,
   componentLibraryPrompt,
   componentPrompt,
 } from "@/lib/agent/instructions"
@@ -17,11 +19,27 @@ const libraryAgent = new Agent({
   instructions: COMPONENT_LIBRARY_INSTRUCTIONS,
 })
 
+const webLibraryAgent = new Agent({
+  name: "AppForge Web Component Designer",
+  model: BUILDER_MODEL,
+  instructions: WEB_COMPONENT_LIBRARY_INSTRUCTIONS,
+})
+
 const componentAgent = new Agent({
   name: "AppForge Component Builder",
   model: BUILDER_MODEL,
   instructions: COMPONENT_INSTRUCTIONS,
 })
+
+const webComponentAgent = new Agent({
+  name: "AppForge Web Component Builder",
+  model: BUILDER_MODEL,
+  instructions: WEB_COMPONENT_INSTRUCTIONS,
+})
+
+function isWebPlan(plan: AppPlan) {
+  return plan.navigation === "top-nav" || plan.navigation === "sidebar"
+}
 
 const librarySchema = z.object({
   components: z
@@ -61,9 +79,10 @@ export async function generateComponents(plan: AppPlan): Promise<AppComponent[]>
   const prompt = user(componentLibraryPrompt(plan))
   let input: AgentInputItem[] = [prompt]
   let best: AppComponent[] = []
+  const agent = isWebPlan(plan) ? webLibraryAgent : libraryAgent
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      const result = await run(libraryAgent, input)
+      const result = await run(agent, input)
       const text = String(result.finalOutput ?? "")
       const json = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1)
       const { accepted, problems } = checkLibrary(librarySchema.parse(JSON.parse(json)).components)
@@ -97,9 +116,10 @@ export async function writeComponent(
   const prompt = user(componentPrompt({ plan, component, earlier, current, request }))
 
   let input: AgentInputItem[] = [prompt]
+  const agent = isWebPlan(plan) ? webComponentAgent : componentAgent
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      const result = await run(componentAgent, input)
+      const result = await run(agent, input)
       const code = `${visibleCode(String(result.finalOutput ?? "")).trim()}\n`
       const problems = componentProblems(code, component.name, earlier.map((other) => other.name), `${current ?? ""}\n${request}`)
       if (problems.length === 0) return code

@@ -24,7 +24,7 @@ export function PlanUsage({ user, projectCount }: { user: SessionUser; projectCo
     <div className="grid gap-4 rounded-[2rem] border border-border/60 bg-white/70 p-5 shadow-[0_8px_32px_-12px_rgba(76,29,149,0.15)] backdrop-blur-xl sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center sm:gap-6">
       <div>
         <p className="text-xs text-muted-foreground">Current plan</p>
-        <p className={cn("mt-1 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold", isPro ? "bg-linear-to-r from-indigo-500 to-fuchsia-500 text-white" : "bg-violet-500/10 text-violet-700")}>
+        <p className={cn("mt-1 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold", isPro ? "bg-brand text-white" : "bg-brand/10 text-brand-dark")}>
           {isPro && <SparklesIcon className="size-3.5" />}
           {PLANS[user.plan].name}
         </p>
@@ -33,7 +33,7 @@ export function PlanUsage({ user, projectCount }: { user: SessionUser; projectCo
       <div className="min-w-0">
         <p className="flex items-center justify-between gap-2 text-sm">
           <span className="inline-flex items-center gap-1.5 font-medium">
-            <CoinsIcon className="size-4 text-violet-600" />
+            <CoinsIcon className="size-4 text-brand" />
             {user.credits.toLocaleString()} credits left
           </span>
         </p>
@@ -51,7 +51,7 @@ export function PlanUsage({ user, projectCount }: { user: SessionUser; projectCo
 
       <div className="min-w-0">
         <p className="inline-flex items-center gap-1.5 text-sm font-medium">
-          <FolderIcon className="size-4 text-violet-600" />
+          <FolderIcon className="size-4 text-brand" />
           {maxProjects === null ? `${projectCount} ${projectCount === 1 ? "project" : "projects"}` : `${Math.min(projectCount, maxProjects)} of ${maxProjects} projects`}
         </p>
         {maxProjects !== null && <Progress value={Math.min((projectCount / maxProjects) * 100, 100)} aria-label="Projects used" className="mt-2" />}
@@ -67,7 +67,7 @@ export function PlanUsage({ user, projectCount }: { user: SessionUser; projectCo
         </Button>
       ) : (
         <Button
-          className="h-10 rounded-full bg-linear-to-r from-indigo-500 via-violet-500 to-fuchsia-500 px-4 text-white shadow-md shadow-violet-500/30 hover:opacity-95"
+          className="h-10 rounded-full bg-brand px-4 text-white shadow-md shadow-brand/30 hover:opacity-95"
           render={<Link href="/pricing" />}
           nativeButton={false}
         >

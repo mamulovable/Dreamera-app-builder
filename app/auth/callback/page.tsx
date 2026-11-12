@@ -65,7 +65,7 @@ export default function AuthCallbackPage() {
             </p>
           </div>
           <Button size="lg" className="h-10" nativeButton={false} render={<Link href="/" />}>
-            Back to AppForge
+            Back to Dreamera
           </Button>
         </>
       ) : (

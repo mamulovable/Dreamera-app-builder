@@ -369,7 +369,7 @@ function FieldRow({ label, stacked, children }: { label: string; stacked?: boole
 }
 
 const inputClass =
-  "h-8 min-w-0 rounded-lg border border-border/70 bg-white px-2 text-xs outline-none transition-colors focus-visible:border-violet-400 focus-visible:ring-2 focus-visible:ring-violet-400/25 disabled:opacity-60"
+  "h-8 min-w-0 rounded-lg border border-border/70 bg-white px-2 text-xs outline-none transition-colors focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/25 disabled:opacity-60"
 
 function NumberField({
   value,
@@ -440,7 +440,7 @@ function OptionsField({
           onClick={() => onChange(option)}
           className={cn(
             "flex h-7 min-w-7 items-center justify-center rounded-md px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60",
-            value === option && "bg-white text-violet-700 shadow-xs"
+            value === option && "bg-white text-brand-dark shadow-xs"
           )}
         >
           {Icon ? <Icon className="size-3.5" /> : name}
@@ -485,7 +485,7 @@ function ColorField({
           aria-expanded={open}
           disabled={disabled}
           onClick={() => setOpen((o) => !o)}
-          className={cn(inputClass, "flex items-center gap-1.5 hover:border-violet-300")}
+          className={cn(inputClass, "flex items-center gap-1.5 hover:border-brand/40")}
         >
           <span
             className="size-4 shrink-0 rounded-[5px] border border-black/10"
@@ -510,7 +510,7 @@ function ColorField({
                 onClick={() => onChange(`var(${themeCssVariable(token)})`)}
                 className={cn(
                   "flex size-6 items-center justify-center rounded-md border border-black/10 transition-transform hover:scale-110",
-                  token === activeToken && "ring-2 ring-violet-500 ring-offset-1"
+                  token === activeToken && "ring-2 ring-brand ring-offset-1"
                 )}
                 style={{ background: colors?.[token] ?? `var(${themeCssVariable(token)})` }}
               >
@@ -530,7 +530,7 @@ function ColorField({
             <button
               type="button"
               onClick={() => onChange("transparent")}
-              className={cn(inputClass, "shrink-0 text-muted-foreground hover:border-violet-300 hover:text-violet-700")}
+              className={cn(inputClass, "shrink-0 text-muted-foreground hover:border-brand/40 hover:text-brand-dark")}
             >
               None
             </button>
@@ -621,7 +621,7 @@ function ImagePromptForm({
       <Button
         type="submit"
         disabled={!prompt.trim() || busy || disabled}
-        className="h-8 w-full rounded-full bg-linear-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-xs text-white shadow-md shadow-violet-500/25 hover:opacity-95 disabled:from-muted disabled:to-muted disabled:text-muted-foreground disabled:opacity-100 disabled:shadow-none"
+        className="h-8 w-full rounded-full bg-brand text-xs text-white shadow-md shadow-brand/25 hover:opacity-95 disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100 disabled:shadow-none"
       >
         {busy ? <Spinner className="text-current" /> : <SparklesIcon />}
         {submitLabel}
@@ -664,12 +664,12 @@ function ImageField({
         {uri && <img src={uri} alt="Current image" className="size-full object-cover" />}
         {job && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-[2px]">
-            <Spinner className="size-5 text-violet-600" />
+            <Spinner className="size-5 text-brand" />
           </div>
         )}
       </div>
       {job && (
-        <p role="status" className="rounded-lg bg-violet-500/8 px-2.5 py-1.5 text-[11px] leading-snug text-violet-800">
+        <p role="status" className="rounded-lg bg-brand/10 px-2.5 py-1.5 text-[11px] leading-snug text-brand-dark">
           {IMAGE_PROGRESS[job]}
         </p>
       )}
@@ -687,11 +687,11 @@ function ImageField({
               disabled={disabled || !selection?.info || (id === "transform" && !uri)}
               onClick={() => setTool((open) => (open === id ? null : id))}
               className={cn(
-                "flex h-8 w-full items-center gap-2 rounded-lg border border-border/70 bg-white px-2.5 text-xs font-medium transition-colors hover:border-violet-300 hover:text-violet-700 disabled:opacity-60",
-                tool === id && "border-violet-300 bg-violet-500/5 text-violet-700"
+                "flex h-8 w-full items-center gap-2 rounded-lg border border-border/70 bg-white px-2.5 text-xs font-medium transition-colors hover:border-brand/40 hover:text-brand-dark disabled:opacity-60",
+                tool === id && "border-brand/40 bg-brand/5 text-brand-dark"
               )}
             >
-              <Icon className="size-3.5 shrink-0 text-violet-600" />
+              <Icon className="size-3.5 shrink-0 text-brand" />
               {label}
             </button>
             {tool === id && (
@@ -820,7 +820,7 @@ function ElementField({
               value={value}
               disabled={disabled}
               onChange={(event) => updateSelected({ style: { opacity: Number(event.target.value) } })}
-              className="h-1.5 w-28 cursor-pointer accent-violet-600"
+              className="h-1.5 w-28 cursor-pointer accent-brand"
             />
             <span className="w-8 text-right text-xs tabular-nums text-muted-foreground">{Math.round(value * 100)}%</span>
           </div>
@@ -945,7 +945,7 @@ function HeaderAction({ label, children, ...props }: React.ComponentProps<typeof
             variant="ghost"
             size="icon-sm"
             aria-label={label}
-            className="rounded-full text-muted-foreground hover:bg-violet-500/10 hover:text-violet-700 aria-pressed:bg-violet-500/10 aria-pressed:text-violet-700"
+            className="rounded-full text-muted-foreground hover:bg-brand/10 hover:text-brand-dark aria-pressed:bg-brand/10 aria-pressed:text-brand-dark"
             {...props}
           />
         }
@@ -965,7 +965,7 @@ function EditorHeader({ editor, screenName }: { editor: InlineEditor; screenName
   const sharedName = selection.file.startsWith("components/") ? selection.file.replace(/^components\/|\.tsx$/g, "") : null
   return (
     <div className="flex items-center gap-2 border-b border-border/60 py-2 pr-1.5 pl-2.5">
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-indigo-100 to-fuchsia-100 text-violet-700">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-brand/15 to-brand-accent/15 text-brand-dark">
         <Icon className="size-4" />
       </span>
       <div className="min-w-0 flex-1">
@@ -1005,7 +1005,7 @@ function EditorNotes({ editor }: { editor: InlineEditor }) {
   return (
     <div className="space-y-1.5 px-3 pt-2.5">
       {notes.map((note) => (
-        <p key={String(note)} className="rounded-lg bg-violet-500/8 px-2.5 py-1.5 text-[11px] leading-snug text-violet-800">
+        <p key={String(note)} className="rounded-lg bg-brand/10 px-2.5 py-1.5 text-[11px] leading-snug text-brand-dark">
           {note}
         </p>
       ))}
@@ -1045,7 +1045,7 @@ function EditWithAi({ editor, label }: { editor: InlineEditor; label: string }) 
           setOpen(true)
           requestAnimationFrame(() => inputRef.current?.focus())
         }}
-        className="h-8 w-full rounded-full bg-linear-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-xs text-white shadow-md shadow-violet-500/25 hover:opacity-95"
+        className="h-8 w-full rounded-full bg-brand text-xs text-white shadow-md shadow-brand/25 hover:opacity-95"
       >
         <SparklesIcon />
         Edit with AI
@@ -1053,9 +1053,9 @@ function EditWithAi({ editor, label }: { editor: InlineEditor; label: string }) 
     )
   }
   return (
-    <form onSubmit={submit} className="rounded-full bg-linear-to-br from-indigo-300/80 via-white to-fuchsia-300/80 p-px focus-within:from-indigo-400 focus-within:to-fuchsia-400">
+    <form onSubmit={submit} className="rounded-full bg-linear-to-br from-brand/40 via-white to-brand-accent/40 p-px focus-within:from-brand focus-within:to-brand-accent">
       <div className="flex items-center gap-1 rounded-full bg-white py-0.5 pr-0.5 pl-2.5">
-        <SparklesIcon className="size-3.5 shrink-0 text-violet-600" />
+        <SparklesIcon className="size-3.5 shrink-0 text-brand" />
         <input
           ref={inputRef}
           value={prompt}
@@ -1075,7 +1075,7 @@ function EditWithAi({ editor, label }: { editor: InlineEditor; label: string }) 
           size="icon-sm"
           disabled={!prompt.trim() || sending}
           aria-label="Send to AI"
-          className="size-7 rounded-full bg-linear-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-white disabled:from-muted disabled:to-muted disabled:text-muted-foreground disabled:opacity-100"
+          className="size-7 rounded-full bg-brand text-white disabled:from-muted disabled:to-muted disabled:text-muted-foreground disabled:opacity-100"
         >
           {sending ? <Spinner className="text-current" /> : <ArrowUpIcon />}
         </Button>
@@ -1123,8 +1123,8 @@ export function ElementPopover({
             aria-selected={id === category?.id}
             onClick={() => setChosenCategory(id)}
             className={cn(
-              "flex min-w-11 flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-violet-500/5 hover:text-foreground",
-              id === category?.id && "bg-violet-500/10 text-violet-700 hover:bg-violet-500/10 hover:text-violet-700"
+              "flex min-w-11 flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-brand/50/5 hover:text-foreground",
+              id === category?.id && "bg-brand/10 text-brand-dark hover:bg-brand/10 hover:text-brand-dark"
             )}
           >
             <Icon className="size-3.5" />
@@ -1175,7 +1175,7 @@ export function ElementAdvancedPanel({
         {categoriesFor(label, true).map(({ id, label: name, icon: Icon, fields }) => (
           <section key={id} aria-label={name} className="border-b border-border/50 p-3 last:border-b-0">
             <h3 className="mb-2.5 flex items-center gap-1.5 text-xs font-semibold">
-              <Icon className="size-3.5 text-violet-600" />
+              <Icon className="size-3.5 text-brand" />
               {name}
             </h3>
             <div className="space-y-2">

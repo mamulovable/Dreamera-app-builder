@@ -63,7 +63,7 @@ export function DownloadDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="gap-5 rounded-3xl p-6 sm:max-w-md">
         <DialogHeader className="flex-row items-center gap-3">
-          <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-100 to-fuchsia-100 text-violet-600">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-brand/15 to-brand-accent/15 text-brand">
             <DownloadIcon className="size-5" />
           </span>
           <div className="min-w-0 space-y-0.5">
@@ -73,7 +73,7 @@ export function DownloadDialog({
         </DialogHeader>
 
         {state.step === "packaging" && (
-          <p role="status" className="flex items-center gap-2 rounded-2xl bg-violet-500/10 px-3 py-2.5 text-sm font-medium text-violet-800">
+          <p role="status" className="flex items-center gap-2 rounded-2xl bg-brand/10 px-3 py-2.5 text-sm font-medium text-brand-dark">
             <Loader2Icon className="size-4 shrink-0 animate-spin" />
             Packaging your project…
           </p>

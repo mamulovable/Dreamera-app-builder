@@ -96,7 +96,7 @@ export function PricingPlans({ checkout }: { checkout: boolean }) {
   return (
     <div className="space-y-6">
       {checkout && (waitingForPayment || isPro) && (
-        <p role="status" className="mx-auto flex w-fit items-center gap-2 rounded-full bg-violet-500/10 px-4 py-2 text-sm font-medium text-violet-800">
+        <p role="status" className="mx-auto flex w-fit items-center gap-2 rounded-full bg-brand/10 px-4 py-2 text-sm font-medium text-brand-dark">
           {isPro ? <CheckIcon className="size-4" /> : <Loader2Icon className="size-4 animate-spin" />}
           {isPro ? "Welcome to Pro! Your credits are ready." : "Confirming your payment…"}
         </p>
@@ -116,7 +116,7 @@ export function PricingPlans({ checkout }: { checkout: boolean }) {
         <PlanCard
           plan="free"
           current={!isPending && !!user && !isPro}
-          tagline="Try AppForge and build your first apps."
+          tagline="Start with a dream and build your first apps."
           price="$0"
           period="forever"
           action={
@@ -151,24 +151,24 @@ export function PricingPlans({ checkout }: { checkout: boolean }) {
             isPending ? (
               <Skeleton className="h-11 rounded-full" />
             ) : !user ? (
-              <Button className="h-11 w-full rounded-full bg-white text-violet-700 hover:bg-white/90" onClick={() => openSignIn("sign-up")}>
+              <Button className="h-11 w-full rounded-full bg-white text-brand-dark hover:bg-white/90" onClick={() => openSignIn("sign-up")}>
                 <SparklesIcon />
                 Sign up to join Pro
               </Button>
             ) : !isPro ? (
-              <Button className="h-11 w-full rounded-full bg-white text-violet-700 hover:bg-white/90" disabled={pending} onClick={() => void redirect("upgrade")}>
+              <Button className="h-11 w-full rounded-full bg-white text-brand-dark hover:bg-white/90" disabled={pending} onClick={() => void redirect("upgrade")}>
                 {pending ? <Loader2Icon className="animate-spin" /> : <SparklesIcon />}
                 Upgrade to Pro
               </Button>
             ) : (
               <div className="space-y-2">
                 {user.cancelAtPeriodEnd ? (
-                  <Button className="h-11 w-full rounded-full bg-white text-violet-700 hover:bg-white/90" disabled={changing} onClick={() => void change("keep-pro")}>
+                  <Button className="h-11 w-full rounded-full bg-white text-brand-dark hover:bg-white/90" disabled={changing} onClick={() => void change("keep-pro")}>
                     {changing && <Loader2Icon className="animate-spin" />}
                     Keep Pro
                   </Button>
                 ) : (
-                  <Button className="h-11 w-full rounded-full bg-white text-violet-700 hover:bg-white/90" disabled={pending} onClick={() => void redirect("manage")}>
+                  <Button className="h-11 w-full rounded-full bg-white text-brand-dark hover:bg-white/90" disabled={pending} onClick={() => void redirect("manage")}>
                     {pending && <Loader2Icon className="animate-spin" />}
                     Manage billing
                   </Button>
@@ -235,7 +235,7 @@ function PlanCard({
       className={cn(
         "relative flex flex-col gap-6 rounded-[2rem] p-7",
         featured
-          ? "bg-linear-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-xl shadow-violet-500/30"
+          ? "bg-brand text-white shadow-xl shadow-brand/30"
           : "border border-border/60 bg-white/70 shadow-[0_8px_32px_-12px_rgba(76,29,149,0.15)] backdrop-blur-xl"
       )}
     >
@@ -243,7 +243,7 @@ function PlanCard({
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-lg font-semibold tracking-tight">{PLANS[plan].name}</h2>
           {current && (
-            <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-medium", featured ? "bg-white/20" : "bg-violet-500/10 text-violet-700")}>Current plan</span>
+            <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-medium", featured ? "bg-white/20" : "bg-brand/10 text-brand-dark")}>Current plan</span>
           )}
         </div>
         <p className={cn("mt-1 text-sm", featured ? "text-white/85" : "text-muted-foreground")}>{tagline}</p>
@@ -263,7 +263,7 @@ function PlanCard({
               <span
                 className={cn(
                   "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full",
-                  featured ? "bg-white/20" : value ? "bg-violet-500/10 text-violet-700" : "bg-muted"
+                  featured ? "bg-white/20" : value ? "bg-brand/10 text-brand-dark" : "bg-muted"
                 )}
               >
                 {value ? <CheckIcon className="size-3" /> : <MinusIcon className="size-3" />}

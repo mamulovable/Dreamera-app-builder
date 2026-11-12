@@ -64,16 +64,29 @@ export const ProjectCard = React.forwardRef<
       ref={ref}
       className="group relative flex flex-col rounded-[2rem] border border-white/70 bg-white/70 p-2 shadow-[0_8px_30px_-16px_rgba(76,29,149,0.25)] backdrop-blur-sm transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_28px_50px_-20px_rgba(76,29,149,0.35)] has-[[data-card-action]:focus-visible]:ring-3 has-[[data-card-action]:focus-visible]:ring-ring/50"
     >
-      <div className="relative flex h-72 items-start justify-center overflow-hidden rounded-[1.6rem] bg-linear-to-br from-violet-100 to-indigo-50">
+      <div className="relative flex h-72 items-start justify-center overflow-hidden rounded-[1.6rem] bg-linear-to-br from-brand/10 to-brand-accent/10">
         <div
           aria-hidden
-          className="absolute -top-10 -right-10 size-36 rounded-full bg-violet-400 opacity-30 blur-2xl"
+          className="absolute -top-10 -right-10 size-36 rounded-full bg-brand opacity-30 blur-2xl"
           style={project.accentColor ? { backgroundColor: project.accentColor } : undefined}
         />
         <div aria-hidden className="absolute -bottom-12 -left-8 size-32 rounded-full bg-white/60 blur-xl" />
-        <div className="relative mt-7 aspect-[9/19] w-40 shrink-0 overflow-hidden rounded-[1.75rem] border-[5px] border-neutral-900 bg-white shadow-xl shadow-black/15 transition-transform duration-500 group-hover:-translate-y-2">
-          <CardScreen project={project} state={state} running={running} />
-        </div>
+        {project.platform === "web" ? (
+          <div className="relative mt-10 w-[88%] overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-xl shadow-black/15 ring-1 ring-black/5 transition-transform duration-500 group-hover:-translate-y-2">
+            <div className="flex h-6 items-center gap-1 border-b border-neutral-200 bg-neutral-100 px-2">
+              <span className="size-1.5 rounded-full bg-red-400" />
+              <span className="size-1.5 rounded-full bg-amber-400" />
+              <span className="size-1.5 rounded-full bg-emerald-400" />
+            </div>
+            <div className="aspect-[16/10]">
+              <CardScreen project={project} state={state} running={running} />
+            </div>
+          </div>
+        ) : (
+          <div className="relative mt-7 aspect-[9/19] w-40 shrink-0 overflow-hidden rounded-[1.75rem] border-[5px] border-neutral-900 bg-white shadow-xl shadow-black/15 transition-transform duration-500 group-hover:-translate-y-2">
+            <CardScreen project={project} state={state} running={running} />
+          </div>
+        )}
         <div className="pointer-events-none absolute top-2.5 left-2.5 flex flex-col items-start gap-1">
           {project.isPublic && project.role === "owner" && (
             <span className="inline-flex items-center gap-1 rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-medium text-emerald-700 backdrop-blur-md">
@@ -106,7 +119,7 @@ export const ProjectCard = React.forwardRef<
             </span>
           ) : (
             <span className="flex min-w-0 items-center gap-2">
-              <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-indigo-100 to-fuchsia-100 text-[10px] font-semibold text-violet-700">
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-brand/15 to-brand-accent/15 text-[10px] font-semibold text-brand-dark">
                 {initials(project.owner ?? "")}
               </span>
               <span className="truncate">{project.owner}</span>
@@ -132,7 +145,7 @@ function CardScreen({
   if (!project.hasPreview) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 px-3 text-center">
-        <span className="flex size-9 items-center justify-center rounded-xl bg-linear-to-br from-indigo-100 to-fuchsia-100 text-violet-600">
+        <span className="flex size-9 items-center justify-center rounded-xl bg-linear-to-br from-brand/15 to-brand-accent/15 text-brand">
           <SparklesIcon className="size-4" />
         </span>
         <p className="text-[11px] leading-snug text-muted-foreground">Your app appears here once it's built</p>

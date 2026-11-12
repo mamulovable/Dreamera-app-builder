@@ -1,20 +1,34 @@
 // Shared shapes and helpers for the workspace canvas and code view.
 
+import type { ScreenLayout } from "@/lib/agent-protocol"
+import type { ProjectPlatform } from "@/lib/projects"
+import { isMobilePlatform } from "@/lib/projects"
+
 export type CanvasScreen = {
   id: string
   name: string
   /** Position on the canvas, in canvas pixels. */
   x: number
   y: number
-  /** Which wireframe to draw inside the phone frame. */
-  layout: "home" | "list" | "detail" | "profile"
+  /** Which wireframe to draw inside the frame. */
+  layout: ScreenLayout
 }
 
 export const SCREEN_WIDTH = 240
 export const SCREEN_HEIGHT = 500
 
+/** Wide browser cards for website projects on the canvas. */
+export const WEB_SCREEN_WIDTH = 480
+export const WEB_SCREEN_HEIGHT = 300
+
 /** Horizontal space between screens laid out in a row. */
 export const SCREEN_GAP = 60
+
+export function canvasScreenSize(platform: ProjectPlatform) {
+  return isMobilePlatform(platform)
+    ? { width: SCREEN_WIDTH, height: SCREEN_HEIGHT }
+    : { width: WEB_SCREEN_WIDTH, height: WEB_SCREEN_HEIGHT }
+}
 
 export type FileNode =
   | { type: "folder"; name: string; children: FileNode[] }

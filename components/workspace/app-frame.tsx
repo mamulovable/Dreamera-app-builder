@@ -3,8 +3,12 @@
 import * as React from "react"
 
 import {
-  DEVICE_WIDTH,
-  PREVIEW_FRAME_URL,
+  ensurePreviewFrameSource,
+  getPreviewFrameSource,
+  subscribePreviewFrameSource,
+} from "@/lib/preview-frame"
+import {
+  previewFrameWidth,
   type ElementEdits,
   type ElementRect,
   type FrameMessage,
@@ -66,19 +70,25 @@ export function AppFrame({
   const frameRef = React.useRef<HTMLIFrameElement>(null)
   const [size, setSize] = React.useState<{ scale: number; height: number } | null>(null)
   const [ready, setReady] = React.useState(false)
+  const frameSource = React.useSyncExternalStore(subscribePreviewFrameSource, getPreviewFrameSource, () => null)
+  const frameWidth = previewFrameWidth(project.frame)
+
+  React.useEffect(() => {
+    ensurePreviewFrameSource()
+  }, [])
 
   React.useEffect(() => {
     const container = containerRef.current
     if (!container) return
     const measure = () => {
-      const scale = container.clientWidth / DEVICE_WIDTH
+      const scale = container.clientWidth / frameWidth
       if (scale > 0) setSize({ scale, height: container.clientHeight / scale })
     }
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(container)
     return () => observer.disconnect()
-  }, [])
+  }, [frameWidth])
 
   const post = React.useCallback((message: HostMessage) => {
     frameRef.current?.contentWindow?.postMessage(message, "*")
@@ -175,17 +185,17 @@ export function AppFrame({
 
   return (
     <div ref={containerRef} className="relative size-full overflow-hidden" style={{ background: theme?.colors.background }}>
-      {size && (
+      {size && frameSource && (
         <iframe
           ref={frameRef}
-          src={PREVIEW_FRAME_URL}
           title={title}
           sandbox="allow-scripts allow-popups"
+          {...("srcDoc" in frameSource ? { srcDoc: frameSource.srcDoc } : { src: frameSource.src })}
           tabIndex={receivesPointer ? undefined : -1}
           aria-hidden={receivesPointer ? undefined : true}
           className="absolute top-0 left-0 origin-top-left border-0"
           style={{
-            width: DEVICE_WIDTH,
+            width: frameWidth,
             height: size.height,
             transform: `scale(${size.scale})`,
             pointerEvents: receivesPointer ? undefined : "none",

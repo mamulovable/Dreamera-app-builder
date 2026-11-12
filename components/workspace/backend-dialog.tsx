@@ -61,7 +61,7 @@ export function BackendDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="gap-5 rounded-3xl p-6 sm:max-w-md">
         <DialogHeader className="flex-row items-center gap-3">
-          <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-100 to-fuchsia-100 text-violet-600">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-brand/15 to-brand-accent/15 text-brand">
             <CloudIcon className="size-5" />
           </span>
           <div className="min-w-0 space-y-0.5">
@@ -117,10 +117,10 @@ function ConnectView({
       <section className="rounded-2xl border border-border/60 p-4">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold">CloudHike</h3>
-          <span className="rounded-full bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-700">Default provider</span>
+          <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand-dark">Default provider</span>
         </div>
         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-          Once you're connected, the AppForge agent deploys what your app needs and connects it for you.
+          Once you're connected, the Dreamera agent deploys what your app needs and connects it for you.
         </p>
         <ul className="mt-3 flex flex-wrap gap-1.5">
           {FEATURES.map(({ icon: Icon, label }) => (
@@ -134,7 +134,7 @@ function ConnectView({
 
       <p className="flex gap-2 text-xs leading-relaxed text-muted-foreground">
         <ShieldCheckIcon className="mt-px size-3.5 shrink-0 text-emerald-600" />
-        You sign in on CloudHike, and AppForge never sees your password. Services run in your account and usage is billed to your workspace there.
+        You sign in on CloudHike, and Dreamera never sees your password. Services run in your account and usage is billed to your workspace there.
       </p>
 
       {shownError && (
@@ -145,7 +145,7 @@ function ConnectView({
 
       {!backend.available ? (
         <p role="status" className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
-          CloudHike isn't set up on this AppForge server yet.
+          CloudHike isn't set up on this Dreamera server yet.
         </p>
       ) : backend.accountConnected ? (
         <Button className="h-10 rounded-full" disabled={pending} onClick={link}>
@@ -222,8 +222,8 @@ function ConnectedView({
 
       {!backend.accountConnected && (
         <p className="-mt-2 text-xs leading-relaxed text-muted-foreground">
-          Your app keeps running, but CloudHike no longer accepts AppForge's access, so nothing new can be deployed.{" "}
-          <a href={`/api/projects/${projectId}/backend/connect`} className="font-medium text-violet-700 hover:underline">
+          Your app keeps running, but CloudHike no longer accepts Dreamera's access, so nothing new can be deployed.{" "}
+          <a href={`/api/projects/${projectId}/backend/connect`} className="font-medium text-brand-dark hover:underline">
             Connect CloudHike again
           </a>
         </p>

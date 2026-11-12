@@ -19,7 +19,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pro
   if (!UUID_PATTERN.test(projectId)) return notFound
 
   const [project] = await db
-    .select({ id: projects.id, title: projects.title, plan: projects.plan, isPublic: projects.isPublic })
+    .select({
+      id: projects.id,
+      title: projects.title,
+      plan: projects.plan,
+      platform: projects.platform,
+      isPublic: projects.isPublic,
+    })
     .from(projects)
     .where(eq(projects.id, projectId))
   if (!project) return notFound
@@ -34,7 +40,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pro
 
   return NextResponse.json(
     {
-      project: previewProject(plan, rows.map(toProjectScreen)),
+      project: previewProject(plan, rows.map(toProjectScreen), project.platform),
       theme: activeTheme(plan?.themePackage),
     },
     { headers: { "Cache-Control": "no-store" } }

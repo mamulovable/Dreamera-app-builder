@@ -82,13 +82,13 @@ function PublicApps() {
   return (
     <section id="explore" className="scroll-mt-24">
       <SectionHeading
-        title="Built with AppForge"
-        description="Real apps from the community. Open one and try it."
+        title="Dreams already taking shape"
+        description="Creations from the community. Open one and see what's possible."
         action={
           <Button
             variant="ghost"
             size="lg"
-            className="h-10 rounded-full px-4 text-muted-foreground hover:bg-violet-500/10 hover:text-violet-700"
+            className="h-10 rounded-full px-4 text-muted-foreground hover:bg-brand/10 hover:text-brand-dark"
             onClick={() => openSignIn("sign-in")}
           >
             Sign in to see your projects
@@ -103,7 +103,7 @@ function PublicApps() {
         <CardSkeletons />
       ) : projects.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-[2rem] border border-border/60 bg-muted/40 px-6 py-14 text-center">
-          <span className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-100 to-fuchsia-100 text-violet-600">
+          <span className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-brand/15 to-brand-accent/15 text-brand">
             <SparklesIcon className="size-5" />
           </span>
           <p className="font-medium">No public apps yet</p>
@@ -239,7 +239,7 @@ function WorkspaceCards({
         </p>
       )}
       {duplicating && (
-        <p role="status" className="mb-4 flex items-center gap-2 rounded-2xl bg-violet-500/10 px-4 py-2.5 text-sm font-medium text-violet-800">
+        <p role="status" className="mb-4 flex items-center gap-2 rounded-2xl bg-brand/10 px-4 py-2.5 text-sm font-medium text-brand-dark">
           <Loader2Icon className="size-4 animate-spin" />
           Duplicating your project…
         </p>
@@ -278,7 +278,7 @@ function UserProjects() {
 
   return (
     <section id="projects" className="scroll-mt-24">
-      <SectionHeading title="Your projects" description="Pick up where you left off, or start something new." />
+      <SectionHeading title="Your projects" description="Pick up a dream in progress, or start a new one." />
 
       {failed && !projects ? (
         <LoadFailed what="your projects" onRetry={reload} />
@@ -315,9 +315,9 @@ function NewProjectCard() {
         window.scrollTo({ top: 0, behavior: "smooth" })
         document.getElementById("prompt")?.focus({ preventScroll: true })
       }}
-      className="group flex min-h-96 flex-col items-center justify-center gap-3 rounded-[2rem] border-2 border-dashed border-violet-200 bg-linear-to-br from-violet-50/70 to-fuchsia-50/50 text-muted-foreground transition-colors hover:border-violet-300 hover:bg-violet-50/60 hover:text-violet-700 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+      className="group flex min-h-96 flex-col items-center justify-center gap-3 rounded-[2rem] border-2 border-dashed border-brand/25 bg-linear-to-br from-brand/5 to-brand-accent/5 text-muted-foreground transition-colors hover:border-brand/40 hover:bg-brand/5 hover:text-brand-dark focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
     >
-      <span className="flex size-14 items-center justify-center rounded-full bg-linear-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-lg shadow-violet-500/30 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-90">
+      <span className="flex size-14 items-center justify-center rounded-full bg-brand text-white shadow-lg shadow-brand/30 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-90">
         <PlusIcon className="size-5" />
       </span>
       <span className="text-sm font-medium">New project</span>

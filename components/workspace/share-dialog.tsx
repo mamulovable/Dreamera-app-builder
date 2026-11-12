@@ -112,7 +112,7 @@ export function ShareDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="gap-5 rounded-3xl p-6 sm:max-w-md">
         <DialogHeader className="flex-row items-center gap-3">
-          <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-100 to-fuchsia-100 text-violet-600">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-brand/15 to-brand-accent/15 text-brand">
             <Share2Icon className="size-5" />
           </span>
           <div className="min-w-0 space-y-0.5">
@@ -157,10 +157,10 @@ export function ShareDialog({
         )}
 
         <div className="flex items-start gap-3 rounded-2xl border border-border/60 p-3">
-          <GlobeIcon className="mt-0.5 size-4 shrink-0 text-violet-600" />
+          <GlobeIcon className="mt-0.5 size-4 shrink-0 text-brand" />
           <div className="min-w-0 flex-1">
             <label htmlFor="project-public" className="text-sm font-medium">
-              Show on the AppForge home page
+              Show on the Dreamera home page
             </label>
             <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
               Anyone can try the app on sample data and read its code, and they'll see your name. They can't see your chat or real

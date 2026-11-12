@@ -14,7 +14,7 @@ export function BuildProgress({ screens }: { screens: ProjectScreen[] }) {
   return (
     <section
       aria-label="Build progress"
-      className="w-full overflow-hidden rounded-2xl border border-violet-200/80 bg-white shadow-[0_12px_32px_-20px_rgba(76,29,149,0.4)]"
+      className="w-full overflow-hidden rounded-2xl border border-brand/25/80 bg-white shadow-[0_12px_32px_-20px_rgba(76,29,149,0.4)]"
     >
       <div className="px-4 pt-3.5 pb-3">
         <div className="flex items-center justify-between text-xs">
@@ -28,10 +28,10 @@ export function BuildProgress({ screens }: { screens: ProjectScreen[] }) {
           aria-valuemin={0}
           aria-valuemax={screens.length}
           aria-valuenow={finished}
-          className="mt-2 h-1.5 overflow-hidden rounded-full bg-violet-500/10"
+          className="mt-2 h-1.5 overflow-hidden rounded-full bg-brand/10"
         >
           <div
-            className="h-full rounded-full bg-linear-to-r from-indigo-500 via-violet-500 to-fuchsia-500 transition-[width] duration-500"
+            className="h-full rounded-full bg-brand transition-[width] duration-500"
             style={{ width: `${(finished / Math.max(screens.length, 1)) * 100}%` }}
           />
         </div>
@@ -45,7 +45,7 @@ export function BuildProgress({ screens }: { screens: ProjectScreen[] }) {
               {screen.name}
             </span>
             {screen.status === "generating" && (
-              <span className="text-[11px] tabular-nums text-violet-700">
+              <span className="text-[11px] tabular-nums text-brand-dark">
                 {screen.code ? `${screen.code.split("\n").length} lines` : "designing"}
               </span>
             )}
@@ -61,7 +61,7 @@ export function BuildProgress({ screens }: { screens: ProjectScreen[] }) {
         >
           <span className="block text-neutral-500">{current.filePath}</span>
           {current.code.split("\n").slice(-6).join("\n")}
-          <span aria-hidden className="ml-0.5 inline-block h-3 w-1.5 animate-pulse bg-violet-400 align-middle" />
+          <span aria-hidden className="ml-0.5 inline-block h-3 w-1.5 animate-pulse bg-brand align-middle" />
         </pre>
       )}
     </section>
@@ -69,7 +69,7 @@ export function BuildProgress({ screens }: { screens: ProjectScreen[] }) {
 }
 
 function StatusIcon({ status }: { status: ProjectScreen["status"] }) {
-  if (status === "generating") return <Spinner className="size-4 shrink-0 text-violet-600" />
+  if (status === "generating") return <Spinner className="size-4 shrink-0 text-brand" />
   if (status === "done") {
     return (
       <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">

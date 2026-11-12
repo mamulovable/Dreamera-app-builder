@@ -11,7 +11,7 @@ const MAX_LISTED = 24
 
 /** A public name, never an email: accounts without a name shouldn't have their address shown to everyone. */
 function authorName(name: string | null) {
-  return name?.trim() && !name.includes("@") ? name.trim() : "AppForge creator"
+  return name?.trim() && !name.includes("@") ? name.trim() : "Dreamera creator"
 }
 
 /** Finished apps their owners made public, for anyone to try. A build in progress waits until it's done. */

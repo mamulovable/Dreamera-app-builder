@@ -5,7 +5,7 @@ import { and, eq } from "drizzle-orm"
 import { db, projects } from "@/db"
 import type { BackendConnectResult } from "@/lib/backend-protocol"
 import { linkProject, saveConnection } from "@/lib/cloudhike/backend"
-import { cloudhikeCallbackUrl, exchangeCloudHikeCode } from "@/lib/cloudhike/client"
+import { appReturnOrigin, cloudhikeCallbackUrl, exchangeCloudHikeCode } from "@/lib/cloudhike/client"
 import { CLOUDHIKE_STATE_COOKIE } from "@/lib/cloudhike/connect-state"
 import { getCurrentUser } from "@/lib/session"
 
@@ -20,7 +20,7 @@ function sameState(a: string, b: string) {
  * cookie, never from the URL, so the redirect back can't be pointed elsewhere.
  */
 export async function GET(request: NextRequest) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin
+  const appUrl = appReturnOrigin(request.nextUrl.origin)
   const { searchParams } = request.nextUrl
   const [expectedState, projectId] = (request.cookies.get(CLOUDHIKE_STATE_COOKIE)?.value ?? "").split(".")
   const state = searchParams.get("state")

@@ -103,7 +103,7 @@ function UpgradeDialog({ reason, open, onOpenChange }: { reason: UpgradeReason; 
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="gap-5 rounded-3xl p-6 sm:max-w-sm">
           <DialogHeader className="items-center text-center">
-            <span className="mb-1 flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-100 to-fuchsia-100 text-violet-600">
+            <span className="mb-1 flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-brand/15 to-brand-accent/15 text-brand">
               <CoinsIcon className="size-5" />
             </span>
             <DialogTitle className="text-lg font-semibold tracking-tight">You've used this month's credits</DialogTitle>
@@ -124,7 +124,7 @@ function UpgradeDialog({ reason, open, onOpenChange }: { reason: UpgradeReason; 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="gap-5 overflow-hidden rounded-3xl p-0 sm:max-w-md">
-        <div className="bg-linear-to-br from-indigo-500 via-violet-500 to-fuchsia-500 px-6 pt-6 pb-5 text-white">
+        <div className="bg-brand px-6 pt-6 pb-5 text-white">
           <span className="mb-3 flex size-11 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm">
             <Icon className="size-5" />
           </span>
@@ -138,7 +138,7 @@ function UpgradeDialog({ reason, open, onOpenChange }: { reason: UpgradeReason; 
           <ul className="space-y-2">
             {PRO_HIGHLIGHTS.map((item) => (
               <li key={item} className="flex items-center gap-2.5 text-sm">
-                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-violet-700">
+                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand-dark">
                   <CheckIcon className="size-3" />
                 </span>
                 {item}
@@ -154,7 +154,7 @@ function UpgradeDialog({ reason, open, onOpenChange }: { reason: UpgradeReason; 
 
           <div className="space-y-2">
             <Button
-              className="h-11 w-full rounded-full bg-linear-to-r from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-md shadow-violet-500/30 hover:opacity-95"
+              className="h-11 w-full rounded-full bg-brand text-white shadow-md shadow-brand/30 hover:opacity-95"
               disabled={pending}
               onClick={() => void redirect("upgrade")}
             >

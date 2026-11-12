@@ -34,7 +34,7 @@ export default async function WorkspacePage({
           <p className="mt-2 text-sm text-muted-foreground">
             Your session has ended. Sign in from the home page to continue.
           </p>
-          <Link href="/" className="mt-5 inline-block text-sm font-medium text-violet-700 hover:underline">
+          <Link href="/" className="mt-5 inline-block text-sm font-medium text-brand-dark hover:underline">
             Go to home
           </Link>
         </div>
@@ -114,7 +114,7 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
-        <Link href="/" aria-label="AppForge home">
+        <Link href="/" aria-label="Dreamera home">
           <Logo />
         </Link>
         <Link

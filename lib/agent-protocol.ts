@@ -7,8 +7,15 @@ import type { UpgradeReason } from "@/lib/plans"
 import type { ProjectStatus } from "@/lib/projects"
 import type { ThemePackage } from "@/lib/themes"
 
-export const SCREEN_LAYOUTS = ["home", "list", "detail", "profile"] as const
+export const SCREEN_LAYOUTS = ["home", "list", "detail", "profile", "landing", "content", "dashboard"] as const
 export type ScreenLayout = (typeof SCREEN_LAYOUTS)[number]
+
+/** Navigation styles. Mobile apps use tabs or stack; websites use a top nav or sidebar. */
+export const APP_NAVIGATIONS = ["tabs", "stack", "top-nav", "sidebar"] as const
+export type AppNavigation = (typeof APP_NAVIGATIONS)[number]
+
+export const MOBILE_NAVIGATIONS = ["tabs", "stack"] as const
+export const WEB_NAVIGATIONS = ["top-nav", "sidebar"] as const
 
 export const SCREEN_STATUSES = ["pending", "generating", "done", "failed"] as const
 export type ScreenStatus = (typeof SCREEN_STATUSES)[number]
@@ -81,7 +88,7 @@ export type AppPlan = {
   tagline: string
   summary: string
   targetUsers: string
-  navigation: "tabs" | "stack"
+  navigation: AppNavigation
   design: {
     style: string
     mode: "light" | "dark"
@@ -205,6 +212,16 @@ export function screenFilePath(slug: string, position: number, tab?: ScreenTab |
 /** Whether the app's tab bar is one shared layout. Tab apps built before it draw the bar in each screen. */
 export function hasTabLayout(plan: Pick<AppPlan, "navigation" | "screens">) {
   return plan.navigation === "tabs" && plan.screens.some((screen) => screen.tab)
+}
+
+/** Whether top-level pages share a generated header or sidebar shell. */
+export function hasWebShell(plan: Pick<AppPlan, "navigation" | "screens">) {
+  return (plan.navigation === "top-nav" || plan.navigation === "sidebar") && plan.screens.some((screen) => screen.tab)
+}
+
+/** Whether a planned screen sits in the shared shell (tabs, top nav, or sidebar). */
+export function hasSharedShell(plan: Pick<AppPlan, "navigation" | "screens">) {
+  return hasTabLayout(plan) || hasWebShell(plan)
 }
 
 export function screenRoute(slug: string, position: number) {

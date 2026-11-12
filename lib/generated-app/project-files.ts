@@ -3,7 +3,7 @@
 // the preview swaps for CSS variables.
 
 import type { AppPlan, DataCollection, ProjectScreen } from "@/lib/agent-protocol"
-import { componentFilePath, hasTabLayout, isRunnable, screenRoute } from "@/lib/agent-protocol"
+import { componentFilePath, hasSharedShell, hasTabLayout, hasWebShell, isRunnable, screenRoute } from "@/lib/agent-protocol"
 import type { AppBackend } from "@/lib/backend-protocol"
 import type { PreviewFile, PreviewProject } from "@/lib/preview-protocol"
 import type { ThemePackage } from "@/lib/themes"
@@ -46,9 +46,9 @@ export default function RootLayout() {
 }
 `
 
-/** The one tab bar of the app. Its tabs come from the plan, so no screen draws or changes for it. */
-function tabLayoutFile(plan: AppPlan) {
-  const tabs = plan.screens.flatMap((screen, position) =>
+/** Shared top-level routes for the generated Tabs shell. */
+function shellScreens(plan: AppPlan) {
+  return plan.screens.flatMap((screen, position) =>
     screen.tab
       ? `      <Tabs.Screen
         name=${JSON.stringify(position === 0 ? "index" : screen.id)}
@@ -59,6 +59,10 @@ function tabLayoutFile(plan: AppPlan) {
       />`
       : []
   )
+}
+
+/** The one tab bar of the app. Its tabs come from the plan, so no screen draws or changes for it. */
+function tabLayoutFile(plan: AppPlan) {
   return `import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 
@@ -74,11 +78,93 @@ export default function TabLayout() {
         tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
       }}
     >
-${tabs.join("\n")}
+${shellScreens(plan).join("\n")}
     </Tabs>
   );
 }
 `
+}
+
+/** Horizontal header for a website. Expo Router still uses Tabs; the preview draws the same chrome. */
+function topNavLayoutFile(plan: AppPlan) {
+  return `import { Ionicons } from "@expo/vector-icons";
+import { Tabs } from "expo-router";
+
+import { colors } from "@/theme";
+
+export default function TopNavLayout() {
+  return (
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarPosition: "top",
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textMuted,
+        tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderBottomColor: colors.border,
+          borderTopWidth: 0,
+          borderBottomWidth: 1,
+          height: 64,
+          paddingHorizontal: 24,
+        },
+        tabBarLabelStyle: { fontSize: 13, fontWeight: "600" },
+        tabBarItemStyle: { flexDirection: "row", gap: 8 },
+      }}
+    >
+${shellScreens(plan).join("\n")}
+    </Tabs>
+  );
+}
+`
+}
+
+/** Left sidebar for a website product area. */
+function sidebarLayoutFile(plan: AppPlan) {
+  return `import { Ionicons } from "@expo/vector-icons";
+import { Tabs } from "expo-router";
+
+import { colors } from "@/theme";
+
+export default function SidebarLayout() {
+  return (
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarPosition: "left",
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textMuted,
+        tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderRightColor: colors.border,
+          borderTopWidth: 0,
+          borderRightWidth: 1,
+          width: 240,
+          paddingTop: 24,
+          paddingHorizontal: 12,
+        },
+        tabBarLabelStyle: { fontSize: 14, fontWeight: "600" },
+        tabBarItemStyle: { justifyContent: "flex-start", paddingHorizontal: 12, height: 44 },
+      }}
+    >
+${shellScreens(plan).join("\n")}
+    </Tabs>
+  );
+}
+`
+}
+
+function shellLayoutFile(plan: AppPlan) {
+  if (plan.navigation === "sidebar") return sidebarLayoutFile(plan)
+  if (plan.navigation === "top-nav") return topNavLayoutFile(plan)
+  return tabLayoutFile(plan)
+}
+
+/** The header button on a website: sign-in when the site has accounts. */
+function websiteCta(plan: AppPlan): { label: string; route: string } | null {
+  const index = plan.screens.findIndex((screen) => screen.id === "sign-in")
+  if (index < 0) return null
+  return { label: "Get started", route: screenRoute(plan.screens[index].id, index) }
 }
 
 const THEME_INDEX_FILE = `import { activeThemeId, themes } from "./themes";
@@ -705,7 +791,7 @@ export function generatedAppFiles(plan: AppPlan | null): PreviewFile[] {
   if (!plan?.themePackage || !plan.collections) return []
   return [
     { path: "app/_layout.tsx", code: LAYOUT_FILE },
-    ...(hasTabLayout(plan) ? [{ path: "app/(tabs)/_layout.tsx", code: tabLayoutFile(plan) }] : []),
+    ...(hasSharedShell(plan) ? [{ path: "app/(tabs)/_layout.tsx", code: shellLayoutFile(plan) }] : []),
     { path: "theme/index.ts", code: THEME_INDEX_FILE },
     { path: "theme/themes.ts", code: themesFile(plan.themePackage) },
     { path: "data/schema.ts", code: schemaFile(plan.collections) },
@@ -722,7 +808,21 @@ export function generatedAppFiles(plan: AppPlan | null): PreviewFile[] {
 }
 
 /** What the preview runtime needs to run the app as built so far. */
-export function previewProject(plan: AppPlan | null, screens: ProjectScreen[]): PreviewProject {
+export function previewProject(
+  plan: AppPlan | null,
+  screens: ProjectScreen[],
+  platform?: "web" | "ios" | "android" | "ios-android"
+): PreviewProject {
+  const shell =
+    plan && hasWebShell(plan)
+      ? plan.navigation === "sidebar"
+        ? "sidebar"
+        : "top-nav"
+      : plan && hasTabLayout(plan)
+        ? "tabs"
+        : null
+  const isWeb =
+    platform === "web" || plan?.navigation === "top-nav" || plan?.navigation === "sidebar"
   return {
     files: [
       ...generatedAppFiles(plan),
@@ -735,5 +835,8 @@ export function previewProject(plan: AppPlan | null, screens: ProjectScreen[]): 
       filePath: s.filePath,
       tab: plan?.screens.find((planned) => planned.id === s.slug)?.tab ?? null,
     })),
+    shell,
+    frame: isWeb ? "browser" : "phone",
+    brand: isWeb && plan ? { name: plan.appName, cta: websiteCta(plan) } : null,
   }
 }

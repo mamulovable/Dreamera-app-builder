@@ -1,19 +1,20 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 
 import { UpgradeDialogProvider } from "@/components/billing/upgrade-dialog";
 import { AuthProvider } from "@/lib/auth-client";
 
-const geist = Geist({
+const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
-  variable: "--font-geist-sans",
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-jakarta",
 });
 
 export const metadata: Metadata = {
-  title: "AppForge — Build mobile apps with AI",
+  title: "Dreamera — Your dream. Our AI. Your creation.",
   description:
-    "Describe your idea and AppForge's AI agent designs and builds your iOS and Android app.",
+    "Got a dream app in mind? Describe it and Dreamera's AI helps you design, build, and bring it to life. No coding expertise required.",
 };
 
 export default function RootLayout({
@@ -22,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={geist.variable}>
+    <html lang="en" className={`${jakarta.variable} scroll-smooth`}>
       <body className="antialiased">
         <AuthProvider>
           <UpgradeDialogProvider>{children}</UpgradeDialogProvider>

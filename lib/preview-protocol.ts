@@ -15,13 +15,34 @@ export type PreviewScreen = {
   tab: ScreenTab | null
 }
 
+export type PreviewShell = "tabs" | "top-nav" | "sidebar"
+
+/** The site name and header button the preview draws. Older payloads omit this. */
+export type PreviewBrand = {
+  name: string
+  cta?: { label: string; route: string } | null
+}
+
 export type PreviewProject = {
   files: PreviewFile[]
   screens: PreviewScreen[]
+  /** Shared chrome the preview draws around tab or website pages. */
+  shell?: PreviewShell | null
+  /** Phone bezel vs wide browser window. Older payloads omit this and mean phone. */
+  frame?: "phone" | "browser"
+  /** Website wordmark and header button. Phone apps omit this. */
+  brand?: PreviewBrand | null
 }
 
-/** The screen size generated apps are designed for, in points. */
+/** The screen size generated phone apps are designed for, in points. */
 export const DEVICE_WIDTH = 390
+
+/** Desktop width for website previews, in points. */
+export const BROWSER_WIDTH = 1280
+
+export function previewFrameWidth(frame: PreviewProject["frame"] = "phone") {
+  return frame === "browser" ? BROWSER_WIDTH : DEVICE_WIDTH
+}
 
 export const PREVIEW_FRAME_URL = "/preview-runtime/frame.html"
 

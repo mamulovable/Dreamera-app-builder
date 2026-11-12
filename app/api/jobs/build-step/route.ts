@@ -1,17 +1,16 @@
 import { NextResponse } from "next/server"
-import { eq } from "drizzle-orm"
 
-import { db, projects } from "@/db"
-import { runBuildStep } from "@/lib/agent/builder"
-import { BuildLostError, claimBuildStep, finishBuild, queueNextStep } from "@/lib/agent/builds"
+import { claimBuildStep, executeBuildStep } from "@/lib/agent/builds"
 import { originFromRequest, verifyJobSignature } from "@/lib/jobs"
 
-// Jobs decides when a step has run too long. Hobby caps this at 300 seconds, which matches JOBS_TIMEOUT_SECONDS.
+// CloudHike Free closes the run if this answer takes more than 300 seconds.
+// The step itself keeps running after the answer, so this only has to claim the step.
 export const maxDuration = 300
 
 /**
- * Runs one step of a build. Called by CloudHike Jobs, not the browser. An error
- * answer makes Jobs retry the step, and any other answer ends the run.
+ * Claims one step of a build. Called by CloudHike Jobs, not the browser.
+ * The answer goes back at once. The model keeps working in this process, so a
+ * slow one can think past the 300 second limit on the free plan.
  */
 export async function POST(request: Request) {
   const raw = await request.text()
@@ -22,18 +21,11 @@ export async function POST(request: Request) {
   const { buildId, step } = JSON.parse(raw) as { buildId: string; step: number }
   const claimed = await claimBuildStep(buildId, step, request.headers.get("x-cloudhike-run-id"))
   if (!claimed) return NextResponse.json({ skipped: true })
-  const { build, log } = claimed
 
-  try {
-    const [project] = await db.select().from(projects).where(eq(projects.id, build.projectId))
-    const more = await runBuildStep(log, project)
-    await log.flush()
-    if (more) await queueNextStep(buildId, step, originFromRequest(request))
-    else await finishBuild(buildId, log)
-    return NextResponse.json({ more })
-  } catch (error) {
-    if (log.signal.aborted || error instanceof BuildLostError) return NextResponse.json({ superseded: true })
-    console.error(`Build ${buildId} step ${step} failed`, error)
-    return NextResponse.json({ error: "The build step failed." }, { status: 500 })
-  }
+  const work = executeBuildStep(claimed.build, claimed.log, step, originFromRequest(request))
+  // A serverless host drops work that is still going when the answer is sent, so it waits.
+  if (process.env.VERCEL) await work
+  else void work.catch((error) => console.error(`Build ${buildId} step ${step} failed`, error))
+
+  return NextResponse.json({ accepted: true })
 }

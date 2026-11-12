@@ -12,7 +12,7 @@ import { loadFile, loadedExports, resetModules, setFiles } from "./modules"
 import { INSETS, Ionicons, Overlays } from "./native"
 import { ScreenContext, findScreen, resetStack, router, useStack, type StackEntry } from "./router"
 
-let project: PreviewProject = { files: [], screens: [] }
+let project: PreviewProject = { files: [], screens: [], shell: null, frame: "phone" }
 let initialRoute = "/"
 /** Bumped to run the app fresh, after its files or data changed. */
 let generation = 0
@@ -102,6 +102,7 @@ postToHost({ type: "ready" })
 
 function App() {
   const stack = useStack()
+  const browser = project.frame === "browser"
   return (
     <View style={styles.phone}>
       <View style={styles.stack}>
@@ -109,9 +110,9 @@ function App() {
           <StackScreen key={entry.key} entry={entry} depth={stack.length - 1 - i} />
         ))}
       </View>
-      <StatusBar />
+      {!browser && <StatusBar />}
       <Overlays />
-      <View pointerEvents="none" style={styles.homeIndicator} />
+      {!browser && <View pointerEvents="none" style={styles.homeIndicator} />}
     </View>
   )
 }
@@ -129,6 +130,8 @@ function StackScreen({ entry, depth }: { entry: StackEntry; depth: number }) {
       </ScreenBoundary>
     </ScreenContext.Provider>
   )
+  const shell = project.shell
+  const onShellRoute = Boolean(findScreen(project.screens, entry.route)?.tab)
   // The screen below stays drawn while the new one slides in over it. The ones
   // further down stay mounted, hidden, so they keep their state and scroll position for going back.
   return (
@@ -137,10 +140,20 @@ function StackScreen({ entry, depth }: { entry: StackEntry; depth: number }) {
       style={{ visibility: depth > 1 ? "hidden" : undefined }}
       inert={!focused}
     >
-      {findScreen(project.screens, entry.route)?.tab ? (
+      {onShellRoute && shell === "sidebar" ? (
+        <View style={styles.sidebarScreen}>
+          <ShellNav active={entry.route} kind="sidebar" />
+          <View style={styles.tabContent}>{content}</View>
+        </View>
+      ) : onShellRoute && shell === "top-nav" ? (
+        <View style={styles.tabScreen}>
+          <ShellNav active={entry.route} kind="top-nav" />
+          <View style={styles.tabContent}>{content}</View>
+        </View>
+      ) : onShellRoute ? (
         <View style={styles.tabScreen}>
           <View style={styles.tabContent}>{content}</View>
-          <TabBar active={entry.route} />
+          <ShellNav active={entry.route} kind="tabs" />
         </View>
       ) : (
         content
@@ -149,32 +162,122 @@ function StackScreen({ entry, depth }: { entry: StackEntry; depth: number }) {
   )
 }
 
-/** The app's `app/(tabs)/_layout.tsx`, which the preview draws itself, like its other navigators. */
-function TabBar({ active }: { active: string }) {
+/** The app's shared shell (`app/(tabs)/_layout.tsx`), which the preview draws itself. */
+function ShellNav({ active, kind }: { active: string; kind: "tabs" | "top-nav" | "sidebar" }) {
+  if (kind === "top-nav") return <TopNav active={active} />
+  if (kind === "sidebar") return <SideNav active={active} />
   return (
     <View accessibilityRole="tablist" style={styles.tabBar}>
-      {project.screens.map((screen) => {
-        if (!screen.tab) return null
-        const selected = screen.route === active
-        const color = selected ? "var(--color-primary)" : "var(--color-text-muted)"
-        return (
-          <Pressable
-            key={screen.route}
-            accessibilityRole="tab"
-            aria-selected={selected}
-            onPress={() => {
-              if (!selected) router.replace(screen.route)
-            }}
-            style={styles.tab}
-          >
-            <Ionicons name={screen.tab.icon} size={24} color={color} />
-            <Text numberOfLines={1} style={[styles.tabLabel, { color }]}>
-              {screen.tab.label}
-            </Text>
-          </Pressable>
-        )
-      })}
+      {navItems().map((screen) => (
+        <NavLink key={screen.route} screen={screen} active={active} kind="tabs" />
+      ))}
     </View>
+  )
+}
+
+function navItems() {
+  return project.screens.filter((screen) => screen.tab)
+}
+
+function brandName() {
+  return project.brand?.name?.trim() || navItems()[0]?.name || "Site"
+}
+
+function openRoute(route: string, selected: boolean) {
+  if (!selected) router.replace(route)
+}
+
+function BrandMark({ compact = false }: { compact?: boolean }) {
+  const name = brandName()
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={name} onPress={() => openRoute("/", false)} style={styles.brand}>
+      <View style={styles.brandMark}>
+        <Text style={styles.brandInitial}>{name.charAt(0).toUpperCase()}</Text>
+      </View>
+      {!compact && (
+        <Text numberOfLines={1} style={styles.brandName}>
+          {name}
+        </Text>
+      )}
+    </Pressable>
+  )
+}
+
+function HeaderCta() {
+  const cta = project.brand?.cta
+  if (!cta) return null
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => router.replace(cta.route)}
+      style={({ pressed }: { pressed: boolean }) => [styles.headerCta, pressed && styles.headerCtaPressed]}
+    >
+      <Text style={styles.headerCtaText}>{cta.label}</Text>
+    </Pressable>
+  )
+}
+
+/** Marketing header: wordmark, text links, and a primary button. */
+function TopNav({ active }: { active: string }) {
+  return (
+    <View accessibilityRole="tablist" style={styles.topNav}>
+      <BrandMark />
+      <View style={styles.topNavLinks}>
+        {navItems().map((screen) => (
+          <NavLink key={screen.route} screen={screen} active={active} kind="top-nav" />
+        ))}
+      </View>
+      <HeaderCta />
+    </View>
+  )
+}
+
+/** Product sidebar: wordmark, links with icons, and the header button at the bottom. */
+function SideNav({ active }: { active: string }) {
+  return (
+    <View accessibilityRole="tablist" style={styles.sidebar}>
+      <View style={styles.sidebarBrand}>
+        <BrandMark />
+      </View>
+      <View style={styles.sidebarLinks}>
+        {navItems().map((screen) => (
+          <NavLink key={screen.route} screen={screen} active={active} kind="sidebar" />
+        ))}
+      </View>
+      <HeaderCta />
+    </View>
+  )
+}
+
+function NavLink({
+  screen,
+  active,
+  kind,
+}: {
+  screen: NonNullable<ReturnType<typeof navItems>[number]>
+  active: string
+  kind: "tabs" | "top-nav" | "sidebar"
+}) {
+  const selected = screen.route === active
+  const color = selected ? "var(--color-primary)" : "var(--color-text-muted)"
+  const tab = screen.tab
+  if (!tab) return null
+  return (
+    <Pressable
+      accessibilityRole="tab"
+      aria-selected={selected}
+      onPress={() => openRoute(screen.route, selected)}
+      style={[
+        kind === "sidebar" ? styles.sidebarItem : kind === "top-nav" ? styles.topNavItem : styles.tab,
+        kind === "top-nav" && selected && styles.topNavItemSelected,
+        kind === "sidebar" && selected && styles.sidebarItemSelected,
+      ]}
+    >
+      {kind !== "top-nav" && <Ionicons name={tab.icon} size={kind === "tabs" ? 24 : 18} color={color} />}
+      <Text numberOfLines={1} style={[kind === "tabs" ? styles.tabLabel : kind === "top-nav" ? styles.topNavLabel : styles.shellLabel, { color }]}>
+        {tab.label}
+      </Text>
+    </Pressable>
   )
 }
 
@@ -277,6 +380,69 @@ const styles = StyleSheet.create({
   },
   tab: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", gap: 2 },
   tabLabel: { fontSize: 11, fontWeight: "500" },
+  topNav: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 24,
+    minHeight: 72,
+    paddingHorizontal: 32,
+    borderBottomWidth: 1,
+    borderBottomColor: "var(--color-border)",
+    backgroundColor: "var(--color-surface)",
+  },
+  brand: { flexDirection: "row", alignItems: "center", gap: 10, maxWidth: 280 },
+  brandMark: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
+    backgroundColor: "var(--color-primary)",
+  },
+  brandInitial: { fontSize: 16, fontWeight: "700", color: "var(--color-on-primary)" },
+  brandName: { flexShrink: 1, fontSize: 18, fontWeight: "700", letterSpacing: -0.3, color: "var(--color-text)" },
+  topNavLinks: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 4 },
+  topNavItem: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 40,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+  },
+  topNavItemSelected: { backgroundColor: "var(--color-primary-soft)" },
+  topNavLabel: { fontSize: 15, fontWeight: "600" },
+  headerCta: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 40,
+    paddingHorizontal: 18,
+    borderRadius: 999,
+    backgroundColor: "var(--color-primary)",
+  },
+  headerCtaPressed: { opacity: 0.85 },
+  headerCtaText: { fontSize: 14, fontWeight: "700", color: "var(--color-on-primary)" },
+  sidebarScreen: { flex: 1, flexDirection: "row" },
+  sidebar: {
+    width: 240,
+    paddingTop: 20,
+    paddingBottom: 20,
+    paddingHorizontal: 12,
+    borderRightWidth: 1,
+    borderRightColor: "var(--color-border)",
+    backgroundColor: "var(--color-surface)",
+  },
+  sidebarBrand: { paddingHorizontal: 8, paddingBottom: 20 },
+  sidebarLinks: { flex: 1, gap: 4 },
+  sidebarItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    minHeight: 44,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  sidebarItemSelected: { backgroundColor: "var(--color-primary-soft)" },
+  shellLabel: { fontSize: 13, fontWeight: "600" },
   statusBar: {
     position: "absolute",
     top: 0,

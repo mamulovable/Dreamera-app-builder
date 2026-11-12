@@ -8,6 +8,7 @@ import {
   DownloadIcon,
   EyeIcon,
   GithubIcon,
+  GlobeIcon,
   Loader2Icon,
   RocketIcon,
   Share2Icon,
@@ -57,7 +58,7 @@ export function WorkspaceHeader({
 
   return (
     <header className="relative z-20 grid h-14 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center md:grid-cols-[1fr_auto_1fr] gap-3 border-b border-border/60 bg-white/80 px-3 backdrop-blur-xl sm:px-4">
-      <Link href="/" aria-label="AppForge home" className="justify-self-start rounded-xl">
+      <Link href="/" aria-label="Dreamera home" className="justify-self-start rounded-xl">
         <span className="hidden sm:inline">
           <Logo className="size-8 rounded-full" />
         </span>
@@ -75,11 +76,11 @@ export function WorkspaceHeader({
           {statusStyle.label}
         </span>
         <span className="hidden items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground lg:inline-flex">
-          <SmartphoneIcon className="size-3" />
+          {platform === "web" ? <GlobeIcon className="size-3" /> : <SmartphoneIcon className="size-3" />}
           {PLATFORM_LABELS[platform]}
         </span>
         {readOnly && (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-violet-500/10 px-2.5 py-1 text-xs font-medium text-violet-700">
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand/10 px-2.5 py-1 text-xs font-medium text-brand-dark">
             <EyeIcon className="size-3" />
             View only
           </span>
@@ -90,7 +91,7 @@ export function WorkspaceHeader({
         <Link
           href="/pricing"
           title={`${credits} credits remaining`}
-          className="hidden h-8 items-center gap-1.5 rounded-full bg-violet-500/10 px-3 text-xs font-medium text-violet-700 transition-colors hover:bg-violet-500/15 xl:inline-flex"
+          className="hidden h-8 items-center gap-1.5 rounded-full bg-brand/10 px-3 text-xs font-medium text-brand-dark transition-colors hover:bg-brand/15 xl:inline-flex"
         >
           <CoinsIcon className="size-3.5" />
           {credits.toLocaleString()}
@@ -126,16 +127,20 @@ export function WorkspaceHeader({
                 Push to GitHub
               </DropdownMenuItem>
             )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="rounded-xl py-2">
-              <SmartphoneIcon />
-              Open in Expo Snack
-            </DropdownMenuItem>
+            {platform !== "web" && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="rounded-xl py-2">
+                  <SmartphoneIcon />
+                  Open in Expo Snack
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 
         {!readOnly && (
-          <Button onClick={onPublish} className="h-8 rounded-full bg-linear-to-r from-indigo-500 via-violet-500 to-fuchsia-500 px-3.5 text-white shadow-md shadow-violet-500/30 hover:opacity-95">
+          <Button onClick={onPublish} className="h-8 rounded-full bg-brand px-3.5 text-white shadow-md shadow-brand/30 hover:opacity-95">
             <RocketIcon />
             <span className="hidden sm:inline">Publish</span>
           </Button>
@@ -148,7 +153,7 @@ export function WorkspaceHeader({
 function BackendButton({ backend, onClick }: { backend: BackendStatus; onClick: () => void }) {
   if (backend.state === "provisioning") {
     return (
-      <Button variant="ghost" onClick={onClick} className="h-8 rounded-full bg-violet-500/10 px-3 text-violet-700 hover:bg-violet-500/15 hover:text-violet-700">
+      <Button variant="ghost" onClick={onClick} className="h-8 rounded-full bg-brand/10 px-3 text-brand-dark hover:bg-brand/15 hover:text-brand-dark">
         <Loader2Icon className="animate-spin" />
         <span className="hidden lg:inline">Setting up backend…</span>
       </Button>

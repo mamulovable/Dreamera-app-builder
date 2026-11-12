@@ -17,9 +17,11 @@ import {
 
 import type { InlineEditor } from "@/hooks/use-inline-editor"
 import { isRunnable, screenRoute, type AppPlan, type ProjectScreen, type ScreenStatus } from "@/lib/agent-protocol"
-import { DEVICE_WIDTH, type PreviewProject } from "@/lib/preview-protocol"
+import { previewFrameWidth, type PreviewProject } from "@/lib/preview-protocol"
+import type { ProjectPlatform } from "@/lib/projects"
+import { isMobilePlatform } from "@/lib/projects"
 import { activeTheme, type AppTheme } from "@/lib/themes"
-import { SCREEN_GAP, SCREEN_HEIGHT, SCREEN_WIDTH, type CanvasScreen } from "@/lib/workspace-data"
+import { canvasScreenSize, SCREEN_GAP, type CanvasScreen } from "@/lib/workspace-data"
 import { cn } from "@/lib/utils"
 import { AppFrame } from "@/components/workspace/app-frame"
 import { ElementAdvancedPanel, ElementPopover } from "@/components/workspace/element-editor"
@@ -48,12 +50,17 @@ const ADVANCED_PANEL_SPACE = 344
 
 const clampZoom = (zoom: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom))
 
-function fitView(screens: CanvasScreen[], width: number, height: number): View {
+function fitView(
+  screens: CanvasScreen[],
+  width: number,
+  height: number,
+  card: { width: number; height: number }
+): View {
   if (screens.length === 0 || width === 0) return { x: 0, y: 0, zoom: 1 }
   const minX = Math.min(...screens.map((s) => s.x))
   const minY = Math.min(...screens.map((s) => s.y)) - LABEL_SPACE
-  const maxX = Math.max(...screens.map((s) => s.x + SCREEN_WIDTH))
-  const maxY = Math.max(...screens.map((s) => s.y + SCREEN_HEIGHT))
+  const maxX = Math.max(...screens.map((s) => s.x + card.width))
+  const maxY = Math.max(...screens.map((s) => s.y + card.height))
   const zoom = clampZoom(
     Math.min(
       (width - FIT_PADDING * 2) / (maxX - minX),
@@ -95,6 +102,7 @@ function canvasItems(plan: AppPlan | null, built: ProjectScreen[]): Omit<CanvasI
 
 export function CanvasPanel({
   projectId,
+  platform,
   plan,
   screens: builtScreens,
   app,
@@ -104,6 +112,7 @@ export function CanvasPanel({
   editor,
 }: {
   projectId: string
+  platform: ProjectPlatform
   plan: AppPlan | null
   screens: ProjectScreen[]
   /** The app as built so far, which the finished screens run from. */
@@ -118,11 +127,13 @@ export function CanvasPanel({
   const sectionRef = React.useRef<HTMLElement>(null)
   const viewportRef = React.useRef<HTMLDivElement>(null)
   const editingFrameRef = React.useRef<HTMLDivElement>(null)
+  const card = React.useMemo(() => canvasScreenSize(platform), [platform])
+  const phone = isMobilePlatform(platform)
   // Where the person dragged screens to; the rest sit in a row in plan order.
   const [moved, setMoved] = React.useState<Record<string, { x: number; y: number }>>({})
   const screens: CanvasItem[] = canvasItems(plan, builtScreens).map((item, i) => ({
     ...item,
-    ...(moved[item.id] ?? { x: i * (SCREEN_WIDTH + SCREEN_GAP), y: 0 }),
+    ...(moved[item.id] ?? { x: i * (card.width + SCREEN_GAP), y: 0 }),
   }))
   const layoutKey = screens.map((s) => s.id).join("|")
   const [view, setView] = React.useState<View>({ x: 0, y: 0, zoom: 1 })
@@ -132,8 +143,8 @@ export function CanvasPanel({
 
   const fitToScreen = React.useCallback(() => {
     const el = viewportRef.current
-    if (el) setView(fitView(screens, el.clientWidth, el.clientHeight))
-  }, [screens])
+    if (el) setView(fitView(screens, el.clientWidth, el.clientHeight, card))
+  }, [screens, card])
 
   // Fit once the viewport has a size, and again whenever the set of screens changes.
   const fittedKey = React.useRef<string | null>(null)
@@ -195,11 +206,11 @@ export function CanvasPanel({
   function focusScreen(screen: CanvasItem) {
     const el = viewportRef.current
     if (!el) return
-    const zoom = clampZoom(Math.min((el.clientHeight - FIT_PADDING * 2) / SCREEN_HEIGHT, 1.25))
+    const zoom = clampZoom(Math.min((el.clientHeight - FIT_PADDING * 2) / card.height, 1.25))
     setView({
       zoom,
-      x: el.clientWidth / 2 - (screen.x + SCREEN_WIDTH / 2) * zoom,
-      y: el.clientHeight / 2 - (screen.y + SCREEN_HEIGHT / 2 - LABEL_SPACE / 2) * zoom,
+      x: el.clientWidth / 2 - (screen.x + card.width / 2) * zoom,
+      y: el.clientHeight / 2 - (screen.y + card.height / 2 - LABEL_SPACE / 2) * zoom,
     })
   }
 
@@ -300,7 +311,7 @@ export function CanvasPanel({
     if (!section || !frame || !elementRect) return setPopoverPosition(null)
     const bounds = section.getBoundingClientRect()
     const box = frame.getBoundingClientRect()
-    const scale = box.width / DEVICE_WIDTH
+    const scale = box.width / previewFrameWidth(app.frame)
     const left = box.left - bounds.left + elementRect.x * scale
     const top = box.top - bounds.top + elementRect.y * scale
     const right = left + elementRect.width * scale
@@ -346,6 +357,8 @@ export function CanvasPanel({
             <ScreenFrame
               key={screen.id}
               screen={screen}
+              card={card}
+              phone={phone}
               projectId={projectId}
               app={app}
               theme={theme}
@@ -371,7 +384,7 @@ export function CanvasPanel({
             canEdit={selected.runnable && !editor.locked}
             onEdit={() => toggleEditing(selected)}
             style={{
-              left: view.x + (selected.x + SCREEN_WIDTH / 2) * view.zoom,
+              left: view.x + (selected.x + card.width / 2) * view.zoom,
               top: view.y + (selected.y - LABEL_SPACE) * view.zoom - 8,
             }}
           />
@@ -443,8 +456,8 @@ function ToolButton({
             aria-label={label}
             aria-pressed={active}
             className={cn(
-              "rounded-full text-muted-foreground hover:bg-violet-500/10 hover:text-violet-700",
-              active && "bg-violet-500/10 text-violet-700"
+              "rounded-full text-muted-foreground hover:bg-brand/10 hover:text-brand-dark",
+              active && "bg-brand/10 text-brand-dark"
             )}
             {...props}
           />
@@ -462,9 +475,9 @@ function EditModeBar({ editor, screenName, besidePanel }: { editor: InlineEditor
     <div
       role="status"
       style={besidePanel ? { left: `calc((100% - ${ADVANCED_PANEL_SPACE}px) / 2)`, maxWidth: `calc(100% - ${ADVANCED_PANEL_SPACE + 12}px)` } : undefined}
-      className="absolute top-11 left-1/2 z-10 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-white/70 bg-white/95 py-1 pr-1 pl-3 text-xs shadow-lg shadow-violet-500/15 ring-1 ring-black/[0.04] backdrop-blur"
+      className="absolute top-11 left-1/2 z-10 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-white/70 bg-white/95 py-1 pr-1 pl-3 text-xs shadow-lg shadow-brand/15 ring-1 ring-black/[0.04] backdrop-blur"
     >
-      <span className="flex items-center gap-1.5 truncate font-medium text-violet-700">
+      <span className="flex items-center gap-1.5 truncate font-medium text-brand-dark">
         <PencilIcon className="size-3.5 shrink-0" />
         <span className="truncate">Editing {screenName}</span>
       </span>
@@ -486,7 +499,7 @@ function EditModeBar({ editor, screenName, besidePanel }: { editor: InlineEditor
         type="button"
         size="sm"
         onClick={editor.exit}
-        className="h-6 shrink-0 rounded-full bg-violet-600 px-2.5 text-[11px] text-white hover:bg-violet-700"
+        className="h-6 shrink-0 rounded-full bg-brand px-2.5 text-[11px] text-white hover:bg-brand-dark"
       >
         Done
       </Button>
@@ -506,7 +519,7 @@ function SelectionToolbar({ style, canEdit, onEdit }: { style: React.CSSProperti
       aria-label="Screen actions"
       onPointerDown={(e) => e.stopPropagation()}
       style={style}
-      className="absolute z-10 flex -translate-x-1/2 -translate-y-full items-center gap-0.5 rounded-full border border-white/70 bg-white p-1 shadow-lg shadow-violet-500/15 ring-1 ring-black/[0.04]"
+      className="absolute z-10 flex -translate-x-1/2 -translate-y-full items-center gap-0.5 rounded-full border border-white/70 bg-white p-1 shadow-lg shadow-brand/15 ring-1 ring-black/[0.04]"
     >
       {actions.map(({ label, icon: Icon, disabled, onClick }) => (
         <ToolButton key={label} label={label} size="icon-sm" disabled={disabled} onClick={onClick}>
@@ -521,7 +534,7 @@ function CanvasEmptyState({ activity }: { activity: string | null }) {
   return (
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
       <div className="max-w-xs rounded-3xl border border-white/70 bg-white/80 p-6 text-center shadow-[0_12px_40px_-20px_rgba(76,29,149,0.35)] backdrop-blur">
-        <span className="mx-auto flex size-11 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-100 to-fuchsia-100 text-violet-600">
+        <span className="mx-auto flex size-11 items-center justify-center rounded-2xl bg-linear-to-br from-brand/15 to-brand-accent/15 text-brand">
           {activity ? <Spinner className="size-5" aria-hidden /> : <LayoutGridIcon className="size-5" />}
         </span>
         <p className="mt-3 text-sm font-medium">
@@ -538,7 +551,7 @@ function CanvasEmptyState({ activity }: { activity: string | null }) {
 function ScreenStatusChip({ status }: { status: CanvasItem["status"] }) {
   if (status === "generating") {
     return (
-      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-700">
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand-dark">
         <Spinner className="size-3" aria-hidden />
         Building
       </span>
@@ -564,6 +577,8 @@ function ScreenStatusChip({ status }: { status: CanvasItem["status"] }) {
 
 function ScreenFrame({
   screen,
+  card,
+  phone,
   projectId,
   app,
   theme,
@@ -580,6 +595,8 @@ function ScreenFrame({
   onEditEscape,
 }: {
   screen: CanvasItem
+  card: { width: number; height: number }
+  phone: boolean
   projectId: string
   app: PreviewProject
   theme: AppTheme | null
@@ -599,10 +616,10 @@ function ScreenFrame({
   return (
     <div
       className={cn("absolute transition-opacity", dimmed && "opacity-40")}
-      style={{ left: screen.x, top: screen.y - LABEL_SPACE, width: SCREEN_WIDTH }}
+      style={{ left: screen.x, top: screen.y - LABEL_SPACE, width: card.width }}
     >
       <div className="mb-2 flex items-center justify-between gap-2 px-1">
-        <p className={cn("truncate text-sm font-medium", selected ? "text-violet-700" : "text-muted-foreground")}>
+        <p className={cn("truncate text-sm font-medium", selected ? "text-brand-dark" : "text-muted-foreground")}>
           {screen.name}
         </p>
         <div className="flex shrink-0 items-center gap-1">
@@ -620,8 +637,8 @@ function ScreenFrame({
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={onToggleEditing}
                     className={cn(
-                      "flex size-5.5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-violet-500/10 hover:text-violet-700 disabled:pointer-events-none disabled:opacity-40",
-                      editing && "bg-violet-600 text-white hover:bg-violet-700 hover:text-white"
+                      "flex size-5.5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-brand/10 hover:text-brand-dark disabled:pointer-events-none disabled:opacity-40",
+                      editing && "bg-brand text-white hover:bg-brand-dark hover:text-white"
                     )}
                   />
                 }
@@ -636,17 +653,31 @@ function ScreenFrame({
       <div
         onPointerDown={onPointerDown}
         className={cn(
-          "overflow-hidden rounded-[2rem] border-[6px] border-neutral-900 bg-white shadow-[0_24px_48px_-24px_rgba(76,29,149,0.35)] transition-shadow",
+          "overflow-hidden bg-white shadow-[0_24px_48px_-24px_rgba(76,29,149,0.35)] transition-shadow",
+          phone
+            ? "rounded-[2rem] border-[6px] border-neutral-900"
+            : "rounded-xl border border-neutral-300 ring-1 ring-black/5",
           interactive && !editing && (dragging ? "cursor-grabbing" : "cursor-grab"),
-          selected && "ring-2 ring-violet-500 ring-offset-4 ring-offset-neutral-50",
+          selected && "ring-2 ring-brand ring-offset-4 ring-offset-neutral-50",
           dragging && "shadow-[0_32px_64px_-24px_rgba(76,29,149,0.5)]"
         )}
-        style={{ height: SCREEN_HEIGHT }}
+        style={{ height: card.height }}
       >
+        {!phone && (
+          <div className="flex h-7 items-center gap-1.5 border-b border-neutral-200 bg-neutral-100 px-3">
+            <span className="size-2 rounded-full bg-red-400" />
+            <span className="size-2 rounded-full bg-amber-400" />
+            <span className="size-2 rounded-full bg-emerald-400" />
+            <span className="ml-2 h-3.5 flex-1 rounded-full bg-white px-2 text-[9px] leading-3.5 text-neutral-400">
+              {screen.name.toLowerCase().replace(/\s+/g, "-")}.app
+            </span>
+          </div>
+        )}
         <div
           ref={frameRef}
           className={cn(
-            "relative h-full transition-opacity",
+            "relative transition-opacity",
+            phone ? "h-full" : "h-[calc(100%-1.75rem)]",
             (screen.status === "planned" || screen.status === "pending") && "opacity-60",
             screen.status === "generating" && "animate-pulse"
           )}
@@ -672,7 +703,7 @@ function ScreenFrame({
               onEditEscape={editing ? onEditEscape : undefined}
             />
           ) : (
-            <ScreenWireframe layout={screen.layout} />
+            <ScreenWireframe layout={screen.layout} phone={phone} />
           )}
         </div>
       </div>
@@ -681,28 +712,85 @@ function ScreenFrame({
 }
 
 /** Placeholder content until the agent generates real screens. */
-function ScreenWireframe({ layout }: { layout: CanvasScreen["layout"] }) {
+function ScreenWireframe({ layout, phone }: { layout: CanvasScreen["layout"]; phone: boolean }) {
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between px-5 pt-3 pb-2 text-[10px] font-semibold text-neutral-800">
-        <span>9:41</span>
-        <span className="h-4 w-16 rounded-full bg-neutral-900" />
-        <span className="flex gap-0.5">
-          <span className="size-1.5 rounded-full bg-neutral-800" />
-          <span className="size-1.5 rounded-full bg-neutral-800" />
-          <span className="h-1.5 w-3 rounded-sm bg-neutral-800" />
-        </span>
-      </div>
+      {phone && (
+        <div className="flex items-center justify-between px-5 pt-3 pb-2 text-[10px] font-semibold text-neutral-800">
+          <span>9:41</span>
+          <span className="h-4 w-16 rounded-full bg-neutral-900" />
+          <span className="flex gap-0.5">
+            <span className="size-1.5 rounded-full bg-neutral-800" />
+            <span className="size-1.5 rounded-full bg-neutral-800" />
+            <span className="h-1.5 w-3 rounded-sm bg-neutral-800" />
+          </span>
+        </div>
+      )}
 
       <div className="flex-1 space-y-3 overflow-hidden px-4 pt-2">
+        {layout === "landing" && (
+          <>
+            <div className="flex items-center justify-between">
+              <div className="h-2.5 w-16 rounded-full bg-brand" />
+              <div className="flex gap-2">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="h-2 w-10 rounded-full bg-neutral-200" />
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2 pt-2">
+              <div className="mx-auto h-4 w-2/3 rounded-full bg-neutral-200" />
+              <div className="mx-auto h-2 w-1/2 rounded-full bg-neutral-100" />
+              <div className="mx-auto h-7 w-24 rounded-full bg-brand" />
+            </div>
+            <div className="grid grid-cols-3 gap-2 pt-1">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-16 rounded-xl bg-brand/5" />
+              ))}
+            </div>
+          </>
+        )}
+        {layout === "content" && (
+          <>
+            <div className="h-3 w-32 rounded-full bg-neutral-200" />
+            <div className="space-y-1.5">
+              <div className="h-2 w-full rounded-full bg-neutral-100" />
+              <div className="h-2 w-full rounded-full bg-neutral-100" />
+              <div className="h-2 w-4/5 rounded-full bg-neutral-100" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="h-20 rounded-xl bg-linear-to-br from-brand/15 to-brand-accent/15" />
+              <div className="space-y-1.5 pt-1">
+                <div className="h-2 w-3/4 rounded-full bg-neutral-200" />
+                <div className="h-2 w-full rounded-full bg-neutral-100" />
+                <div className="h-2 w-2/3 rounded-full bg-neutral-100" />
+              </div>
+            </div>
+          </>
+        )}
+        {layout === "dashboard" && (
+          <>
+            <div className="h-3 w-28 rounded-full bg-neutral-200" />
+            <div className="grid grid-cols-3 gap-2">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-14 rounded-xl bg-brand/5" />
+              ))}
+            </div>
+            <div className="h-24 rounded-xl border border-neutral-100 bg-neutral-50" />
+            <div className="grid grid-cols-2 gap-2">
+              <div className="h-16 rounded-xl bg-brand-accent/10" />
+              <div className="h-16 rounded-xl bg-brand/5" />
+            </div>
+          </>
+        )}
         {layout === "home" && (
           <>
             <div className="h-3 w-24 rounded-full bg-neutral-200" />
             <div className="h-2 w-36 rounded-full bg-neutral-100" />
-            <div className="h-28 rounded-2xl bg-linear-to-br from-indigo-400 via-violet-400 to-fuchsia-400" />
+            <div className="h-28 rounded-2xl bg-linear-to-br from-brand to-brand-accent" />
             <div className="grid grid-cols-2 gap-2">
-              <div className="h-20 rounded-xl bg-violet-50" />
-              <div className="h-20 rounded-xl bg-fuchsia-50" />
+              <div className="h-20 rounded-xl bg-brand/5" />
+              <div className="h-20 rounded-xl bg-brand-accent/10" />
             </div>
             {[0, 1].map((i) => (
               <div key={i} className="flex items-center gap-2">
@@ -720,12 +808,12 @@ function ScreenWireframe({ layout }: { layout: CanvasScreen["layout"] }) {
             <div className="h-8 rounded-full bg-neutral-100" />
             <div className="flex gap-1.5">
               {["w-12", "w-16", "w-10"].map((w, i) => (
-                <div key={i} className={cn("h-5 rounded-full", w, i === 0 ? "bg-violet-500" : "bg-neutral-100")} />
+                <div key={i} className={cn("h-5 rounded-full", w, i === 0 ? "bg-brand" : "bg-neutral-100")} />
               ))}
             </div>
             {[0, 1, 2, 3].map((i) => (
               <div key={i} className="flex items-center gap-2.5 rounded-xl border border-neutral-100 p-2">
-                <div className="size-12 rounded-lg bg-linear-to-br from-violet-100 to-fuchsia-100" />
+                <div className="size-12 rounded-lg bg-linear-to-br from-brand/15 to-brand-accent/15" />
                 <div className="flex-1 space-y-1.5">
                   <div className="h-2 w-3/4 rounded-full bg-neutral-200" />
                   <div className="h-2 w-1/2 rounded-full bg-neutral-100" />
@@ -736,7 +824,7 @@ function ScreenWireframe({ layout }: { layout: CanvasScreen["layout"] }) {
         )}
         {layout === "detail" && (
           <>
-            <div className="-mx-4 h-40 bg-linear-to-br from-indigo-200 to-fuchsia-200" />
+            <div className="-mx-4 h-40 bg-linear-to-br from-brand/30 to-brand-accent/30" />
             <div className="h-3 w-32 rounded-full bg-neutral-200" />
             <div className="space-y-1.5">
               <div className="h-2 w-full rounded-full bg-neutral-100" />
@@ -748,19 +836,19 @@ function ScreenWireframe({ layout }: { layout: CanvasScreen["layout"] }) {
                 <div key={i} className="h-12 rounded-xl bg-neutral-50" />
               ))}
             </div>
-            <div className="h-10 rounded-full bg-violet-500" />
+            <div className="h-10 rounded-full bg-brand" />
           </>
         )}
         {layout === "profile" && (
           <>
             <div className="flex flex-col items-center gap-2 pt-2">
-              <div className="size-16 rounded-full bg-linear-to-br from-indigo-300 to-fuchsia-300" />
+              <div className="size-16 rounded-full bg-linear-to-br from-brand/40 to-brand-accent/40" />
               <div className="h-3 w-24 rounded-full bg-neutral-200" />
               <div className="h-2 w-16 rounded-full bg-neutral-100" />
             </div>
             <div className="grid grid-cols-3 gap-2 text-center">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="h-10 rounded-xl bg-violet-50" />
+                <div key={i} className="h-10 rounded-xl bg-brand/5" />
               ))}
             </div>
             {[0, 1, 2, 3].map((i) => (
@@ -773,11 +861,13 @@ function ScreenWireframe({ layout }: { layout: CanvasScreen["layout"] }) {
         )}
       </div>
 
-      <div className="flex justify-around border-t border-neutral-100 px-4 py-3">
-        {[0, 1, 2, 3].map((i) => (
-          <span key={i} className={cn("size-4 rounded-md", i === 0 ? "bg-violet-500" : "bg-neutral-200")} />
-        ))}
-      </div>
+      {phone && (
+        <div className="flex justify-around border-t border-neutral-100 px-4 py-3">
+          {[0, 1, 2, 3].map((i) => (
+            <span key={i} className={cn("size-4 rounded-md", i === 0 ? "bg-brand" : "bg-neutral-200")} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

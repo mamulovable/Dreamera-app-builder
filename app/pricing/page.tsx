@@ -1,14 +1,14 @@
 import type { Metadata } from "next"
 
 import { PricingPlans } from "@/components/billing/pricing-plans"
-import { Logo } from "@/components/home/logo"
 import { SignInDialogProvider } from "@/components/home/sign-in-dialog"
+import { SiteFooter } from "@/components/home/site-footer"
 import { SiteHeader } from "@/components/home/site-header"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { EDIT_CREDITS, IMAGE_CREDITS, PLANS, PRO_MONTHLY_CREDITS, SCREEN_CREDITS, SMALL_APP_CREDITS } from "@/lib/plans"
 
 export const metadata: Metadata = {
-  title: "Pricing — AppForge",
+  title: "Pricing — Dreamera",
   description: "Start free and build your first apps with AI. Upgrade to Pro for unlimited projects and iOS and Android exports.",
 }
 
@@ -45,8 +45,8 @@ export default async function PricingPage({ searchParams }: { searchParams: Prom
     <SignInDialogProvider>
       <div className="relative min-h-screen overflow-x-hidden bg-background">
         <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[700px] overflow-hidden">
-          <div className="absolute -top-40 left-1/2 size-[520px] -translate-x-[110%] animate-blob rounded-full bg-indigo-300/40 blur-[100px]" />
-          <div className="absolute -top-20 left-1/2 size-[480px] translate-x-[10%] animate-blob rounded-full bg-fuchsia-300/35 blur-[100px] [animation-delay:-6s]" />
+          <div className="absolute -top-40 left-1/2 size-[520px] -translate-x-[110%] animate-blob rounded-full bg-brand/25 blur-[100px]" />
+          <div className="absolute -top-20 left-1/2 size-[480px] translate-x-[10%] animate-blob rounded-full bg-brand-accent/20 blur-[100px] [animation-delay:-6s]" />
           <div className="absolute inset-x-0 bottom-0 h-40 bg-linear-to-b from-transparent to-background" />
         </div>
 
@@ -69,7 +69,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Prom
             <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {CREDIT_COSTS.map(({ value, label, detail }) => (
                 <li key={label} className="rounded-3xl border border-border/60 bg-white/70 p-5">
-                  <p className="text-3xl font-semibold tracking-tight text-violet-700">
+                  <p className="text-3xl font-semibold tracking-tight text-brand-dark">
                     {value === 0 ? "Free" : `${value} ${value === 1 ? "credit" : "credits"}`}
                   </p>
                   <p className="mt-2 text-sm font-medium">{label}</p>
@@ -94,12 +94,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Prom
           </section>
         </main>
 
-        <footer className="relative px-4 pb-4 sm:px-6">
-          <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 rounded-[2rem] border border-border/60 bg-muted/40 px-6 py-6 text-sm text-muted-foreground sm:flex-row">
-            <Logo className="size-7 rounded-xl" />
-            <p>© {new Date().getFullYear()} AppForge. All rights reserved.</p>
-          </div>
-        </footer>
+        <SiteFooter />
       </div>
     </SignInDialogProvider>
   )

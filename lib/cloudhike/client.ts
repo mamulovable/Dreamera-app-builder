@@ -23,8 +23,38 @@ export function isCloudHikeAvailable() {
   return Boolean(process.env.CLOUDHIKE_CLIENT_ID && process.env.CLOUDHIKE_CLIENT_SECRET && process.env.CLOUDHIKE_ENCRYPTION_KEY)
 }
 
+function originOf(value: string | undefined) {
+  const trimmed = value?.trim() ?? ""
+  if (!trimmed) return ""
+  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+  try {
+    return new URL(withProtocol).origin
+  } catch {
+    return ""
+  }
+}
+
+function isPublicOrigin(origin: string) {
+  if (!origin) return false
+  try {
+    return !/^(localhost|127\.0\.0\.1)$/i.test(new URL(origin).hostname)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Where to send the browser. The public host they are already on wins, so a
+ * deployed site is not sent to a dead tunnel left in NEXT_PUBLIC_APP_URL.
+ */
+export function appReturnOrigin(requestOrigin: string) {
+  const fromRequest = originOf(requestOrigin)
+  if (isPublicOrigin(fromRequest)) return fromRequest
+  return originOf(process.env.NEXT_PUBLIC_APP_URL) || fromRequest || requestOrigin
+}
+
 export function cloudhikeCallbackUrl(fallbackOrigin: string) {
-  return new URL(CLOUDHIKE_CALLBACK_PATH, process.env.NEXT_PUBLIC_APP_URL || fallbackOrigin).toString()
+  return new URL(CLOUDHIKE_CALLBACK_PATH, appReturnOrigin(fallbackOrigin)).toString()
 }
 
 export function cloudhikeConnectUrl(redirectUri: string, state: string) {

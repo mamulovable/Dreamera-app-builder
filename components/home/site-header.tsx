@@ -31,29 +31,30 @@ import { Logo } from "@/components/home/logo"
 import { useSignInDialog } from "@/components/home/sign-in-dialog"
 
 const NAV_LINKS = [
-  { label: "Explore", href: "/#explore" },
-  { label: "Templates", href: "/#templates" },
+  { label: "How it works", href: "/#steps" },
+  { label: "Explore", href: "/#possible" },
+  { label: "Why Dreamera", href: "/#why" },
   { label: "Pricing", href: "/pricing" },
-  { label: "Docs", href: "/#docs" },
 ]
 
 export function SiteHeader() {
   const { user, isPending } = useAuth()
   const { openSignIn } = useSignInDialog()
+  const navLinks = user ? NAV_LINKS.filter((link) => link.href === "/pricing") : NAV_LINKS
 
   return (
     <header className="sticky top-0 z-40 px-3 pt-3 sm:px-6 sm:pt-4">
-      <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-4 rounded-full border border-white/60 bg-white/65 pr-2 pl-3 shadow-[0_8px_32px_-12px_rgba(76,29,149,0.25)] ring-1 ring-black/[0.03] backdrop-blur-xl sm:pl-4">
+      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 rounded-full border border-white/60 bg-white/65 pr-2 pl-3 shadow-[0_8px_32px_-12px_rgba(76,29,149,0.25)] ring-1 ring-black/[0.03] backdrop-blur-xl sm:pl-4">
         <div className="flex items-center gap-8">
-          <Link href="/" aria-label="AppForge home">
+          <Link href="/" aria-label="Dreamera home">
             <Logo className="size-8 rounded-full" />
           </Link>
           <nav className="hidden items-center gap-1 md:flex">
-            {NAV_LINKS.map((link) => (
+            {navLinks.map((link) => (
               <Link
                 key={link.label}
                 href={link.href}
-                className="rounded-full px-3.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-violet-500/10 hover:text-violet-700"
+                className="rounded-full px-3.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-brand/10 hover:text-brand-dark"
               >
                 {link.label}
               </Link>
@@ -81,10 +82,11 @@ export function SiteHeader() {
               </Button>
               <Button
                 size="lg"
-                className="h-10 rounded-full bg-linear-to-r from-indigo-500 via-violet-500 to-fuchsia-500 px-5 text-white shadow-md shadow-violet-500/30 transition-transform hover:scale-[1.03] hover:opacity-95"
-                onClick={() => openSignIn("sign-up")}
+                className="h-10 rounded-full bg-brand px-5 text-white shadow-md shadow-brand/30 transition-transform hover:scale-[1.03] hover:opacity-95"
+                nativeButton={false}
+                render={<Link href="/#composer" />}
               >
-                Get started
+                Start dreaming
               </Button>
             </>
           )}
@@ -103,7 +105,7 @@ export function SiteHeader() {
               <MenuIcon />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48 rounded-2xl">
-              {NAV_LINKS.map((link) => (
+              {navLinks.map((link) => (
                 <DropdownMenuItem
                   key={link.label}
                   render={<Link href={link.href} />}
@@ -136,7 +138,7 @@ function CreditsBadge({ credits, plan }: { credits: number; plan: PlanId }) {
     <Link
       href="/pricing"
       title={`${credits} credits remaining on the ${PLANS[plan].name} plan`}
-      className="inline-flex h-9 items-center gap-1.5 rounded-full bg-violet-500/10 px-3 text-sm font-medium text-violet-700 transition-colors hover:bg-violet-500/15"
+      className="inline-flex h-9 items-center gap-1.5 rounded-full bg-brand/10 px-3 text-sm font-medium text-brand-dark transition-colors hover:bg-brand/15"
     >
       <CoinsIcon className="size-4" />
       {credits.toLocaleString()}
@@ -164,7 +166,7 @@ function UserMenu({ user }: { user: SessionUser }) {
       >
         <Avatar size="lg" className="size-10 ring-2 ring-white">
           {image && <AvatarImage src={image} alt={name} />}
-          <AvatarFallback className="bg-linear-to-br from-indigo-100 to-violet-100 font-medium text-violet-700">
+          <AvatarFallback className="bg-linear-to-br from-brand/10 to-brand/20 font-medium text-brand-dark">
             {initials}
           </AvatarFallback>
         </Avatar>

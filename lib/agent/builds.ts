@@ -3,7 +3,7 @@ import { and, asc, eq, gt, sql, type SQL } from "drizzle-orm"
 
 import { buildEvents, builds, db, projects, screens, type Project } from "@/db"
 import { toProjectScreen, type AgentEvent, type AppPlan } from "@/lib/agent-protocol"
-import { prepareScreens } from "@/lib/agent/builder"
+import { prepareScreens, runBuildStep } from "@/lib/agent/builder"
 import { refundCharge, refundUnfinishedBuild, type BuildCharge } from "@/lib/billing/credits"
 import { getJobRun, jobCallbackBase, jobsEndpointUp, startJobRun } from "@/lib/jobs"
 
@@ -14,11 +14,17 @@ const FLUSH_MS = 200
 const POLL_MS = 300
 // How often a reader checks the build's Jobs run while no events arrive.
 const RECONCILE_MS = 10_000
-// A step that succeeded queues the next one right after, so a longer gap means it never did.
+// The Jobs run is answered as soon as a step is claimed. Heartbeats keep
+// updatedAt fresh while the model is still thinking. A longer gap means the
+// process stopped before it queued the next step.
 const STALLED_MS = 60_000
+const HEARTBEAT_MS = 15_000
 
 // A failed step is safe to run again: finished screens are kept.
 const JOB_RETRIES = 2
+
+// Retries of a step that already answered Jobs. The process keeps these, since that run will not try again.
+const stepFailures = new Map<string, number>()
 
 const FAILED_MESSAGE = 'The build stopped before it finished. Say "try again" and I\'ll pick up where it left off.'
 
@@ -66,6 +72,35 @@ export class BuildLog {
     const next = this.flushing.catch(() => {}).then(() => this.write())
     this.flushing = next
     return next
+  }
+
+  /** Refreshes the build so a follower can tell this execution is still working. */
+  touch() {
+    return db
+      .update(builds)
+      .set({ updatedAt: new Date() })
+      .where(and(eq(builds.id, this.buildId), eq(builds.lease, this.lease), eq(builds.status, "active")))
+  }
+
+  /**
+   * While a model is only thinking it writes nothing, and the Jobs run is already
+   * finished. This keeps that quiet stretch from looking like a stalled build.
+   */
+  keepAlive() {
+    const timer = setInterval(() => {
+      this.touch().catch((error) => console.error("Build heartbeat failed", error))
+    }, HEARTBEAT_MS)
+    return () => clearInterval(timer)
+  }
+
+  /** Points followers at a new Jobs run, if this execution still owns the build. */
+  async attachJob(jobId: string) {
+    const [row] = await db
+      .update(builds)
+      .set({ jobId })
+      .where(and(eq(builds.id, this.buildId), eq(builds.lease, this.lease), eq(builds.status, "active")))
+      .returning({ id: builds.id })
+    return Boolean(row)
   }
 
   private async write() {
@@ -183,6 +218,58 @@ export async function startBuild(
  */
 export async function claimBuildStep(buildId: string, step: number, jobId: string | null) {
   return takeLease(buildId, sql`${builds.step} <= ${step}`, { step, ...(jobId ? { jobId } : {}) })
+}
+
+/**
+ * Runs one claimed step to the end. The Jobs request that claimed it has already
+ * been answered: CloudHike Free stops waiting at 300 seconds, and a model can
+ * think for longer. Callers keep this promise alive in the server process.
+ */
+export async function executeBuildStep(
+  build: { id: string; projectId: string },
+  log: BuildLog,
+  step: number,
+  origin: string | null
+) {
+  const stop = log.keepAlive()
+  const attemptKey = `${build.id}:${step}`
+  try {
+    await log.touch()
+    const [project] = await db.select().from(projects).where(eq(projects.id, build.projectId))
+    if (!project) {
+      await failBuild(build.id, "Couldn't start the build. Please try again.")
+      return
+    }
+    const more = await runBuildStep(log, project)
+    await log.flush()
+    if (log.signal.aborted) return
+    if (more) await queueNextStep(build.id, step, origin)
+    else await finishBuild(build.id, log)
+    stepFailures.delete(attemptKey)
+  } catch (error) {
+    if (log.signal.aborted || error instanceof BuildLostError) return
+    console.error(`Build ${build.id} step ${step} failed`, error)
+    const attempt = (stepFailures.get(attemptKey) ?? 0) + 1
+    stepFailures.set(attemptKey, attempt)
+    if (attempt <= JOB_RETRIES) {
+      try {
+        const jobId = await startJobRun({
+          path: BUILD_WORKER_PATH,
+          body: { buildId: build.id, step },
+          retries: JOB_RETRIES,
+          base: jobCallbackBase(origin),
+        })
+        await log.attachJob(jobId)
+        return
+      } catch (retryError) {
+        console.error(`Build ${build.id} step ${step} could not be queued again`, retryError)
+      }
+    }
+    stepFailures.delete(attemptKey)
+    await failBuild(build.id).catch((failError) => console.error(`Ending build ${build.id} failed`, failError))
+  } finally {
+    stop()
+  }
 }
 
 /** Queues the step after `step`, calling back the same host that ran this step. */

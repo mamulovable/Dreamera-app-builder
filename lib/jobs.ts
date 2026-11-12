@@ -10,18 +10,43 @@ export type JobRun = {
   error: string | null
 }
 
-function jobsRequest(path: string, init?: RequestInit) {
-  if (!process.env.JOBS_API_URL || !process.env.JOBS_API_KEY) {
+/** Adds https:// when an env value is a host with no scheme, so `new URL` can read it. */
+function withProtocol(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return ""
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+}
+
+function jobsApiBase() {
+  if (!process.env.JOBS_API_KEY) {
     throw new Error("JOBS_API_URL and JOBS_API_KEY must be set to build screens.")
   }
-  return fetch(`${process.env.JOBS_API_URL}${path}`, {
+  const raw = process.env.JOBS_API_URL?.trim() ?? ""
+  if (!raw) throw new Error("JOBS_API_URL and JOBS_API_KEY must be set to build screens.")
+  let url: URL
+  try {
+    url = new URL(withProtocol(raw))
+  } catch {
+    throw new Error(`JOBS_API_URL is not a valid URL ("${raw}"). Set it to your CloudHike Jobs URL, https://cloudhike.dev/api/jobs-service/your-project.`)
+  }
+  const appHost = (process.env.JOBS_PUBLIC_URL || process.env.NEXT_PUBLIC_APP_URL || "").replace(/^https?:\/\//i, "").split("/")[0]
+  if (url.hostname === appHost || url.hostname.endsWith(".vercel.app")) {
+    throw new Error(
+      `JOBS_API_URL is set to ${url.hostname}. That is this website, not CloudHike Jobs. Set JOBS_API_URL to https://cloudhike.dev/api/jobs-service/your-project and JOBS_PUBLIC_URL to https://${url.hostname}.`
+    )
+  }
+  return url.toString().replace(/\/$/, "")
+}
+
+function jobsRequest(path: string, init?: RequestInit) {
+  return fetch(`${jobsApiBase()}${path}`, {
     ...init,
     headers: { "content-type": "application/json", "x-api-key": process.env.JOBS_API_KEY },
   })
 }
 
 function jobsPublicBase() {
-  return process.env.JOBS_PUBLIC_URL || process.env.NEXT_PUBLIC_APP_URL || ""
+  return withProtocol(process.env.JOBS_PUBLIC_URL || process.env.NEXT_PUBLIC_APP_URL || "")
 }
 
 /** Localhost is the dev machine. Jobs cannot call it, and a tunnel address is not the deployed site. */
@@ -115,7 +140,8 @@ export async function startJobRun({
       method: "POST",
       body,
       retries,
-      // The longest on the Free plan. Pro allows up to 3600.
+      // Free allows 300, Pro 3600. The build route answers inside this window
+      // and keeps working afterwards, because a slow model can think for longer.
       timeoutSeconds: Number(process.env.JOBS_TIMEOUT_SECONDS) || 300,
       callbackUrl: null,
     }),

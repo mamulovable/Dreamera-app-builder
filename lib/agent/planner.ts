@@ -3,7 +3,14 @@ import { and, eq } from "drizzle-orm"
 import { z } from "zod"
 
 import { db, messages, projects, screens, type Project, type Screen } from "@/db"
-import { MAX_TABS, MIN_TABS, SCREEN_LAYOUTS, type AppPlan, type ChatMessage } from "@/lib/agent-protocol"
+import {
+  APP_NAVIGATIONS,
+  MAX_TABS,
+  MIN_TABS,
+  SCREEN_LAYOUTS,
+  type AppPlan,
+  type ChatMessage,
+} from "@/lib/agent-protocol"
 import { mergePlan, planAppChanges, slugify, type AppChanges } from "@/lib/agent/changes"
 import { configureAgents, DEFAULT_SCREEN_COUNT, PLANNER_MODEL } from "@/lib/agent/config"
 import { plannerInstructions, type PlannerState } from "@/lib/agent/instructions"
@@ -33,25 +40,31 @@ const screenSchema = z.object({
   keyElements: z.array(z.string()).describe("3 to 6 concrete UI elements with real content"),
   layout: z
     .enum(SCREEN_LAYOUTS)
-    .describe("Closest wireframe: home (dashboard), list (feed/search), detail (one item), profile (account/settings)"),
+    .describe(
+      "Closest wireframe. Mobile: home, list, detail, profile. Website: landing (marketing home), content (about/pricing/docs), dashboard (signed-in overview), plus home, list, detail, profile when they fit."
+    ),
   navigatesTo: z.array(z.string()).describe("Ids of screens this screen links to"),
   tab: z
     .object({
-      label: z.string().describe("Short tab label, e.g. 'Home'"),
+      label: z.string().describe("Short nav label, e.g. 'Home'"),
       icon: z.string().describe("Ionicons outline name, e.g. 'home-outline'"),
     })
     .nullable()
-    .describe("How this screen appears in the shared tab bar, or null if it isn't a tab"),
+    .describe(
+      "How this screen appears in the shared nav (mobile tab bar, website top nav, or sidebar), or null if it isn't a top-level item"
+    ),
 })
 
 // No min/max/regex constraints: not every model behind CloudHike accepts them
 // in strict tool schemas. `propose_plan` checks the rules itself instead.
 const planSchema = z.object({
-  appName: z.string().describe("Short, brandable app name"),
-  tagline: z.string().describe("One line describing the app"),
-  summary: z.string().describe("2 to 3 sentences: what the app does and its core user journeys"),
-  targetUsers: z.string().describe("Who the app is for"),
-  navigation: z.enum(["tabs", "stack"]),
+  appName: z.string().describe("Short, brandable app or site name"),
+  tagline: z.string().describe("One line describing the app or site"),
+  summary: z.string().describe("2 to 3 sentences: what it does and its core user journeys"),
+  targetUsers: z.string().describe("Who it is for"),
+  navigation: z
+    .enum(APP_NAVIGATIONS)
+    .describe("Mobile: tabs or stack. Website: top-nav or sidebar."),
   design: z.object({
     style: z.string().describe("Visual style in a few words, e.g. 'calm, minimal, rounded cards'"),
     mode: z.enum(["light", "dark"]),
@@ -61,12 +74,12 @@ const planSchema = z.object({
   }),
   screens: z
     .array(screenSchema)
-    .describe(`At most ${DEFAULT_SCREEN_COUNT}, plus a default Sign In screen, unless the person explicitly asks for more, in build order. The first one is where the app opens.`),
+    .describe(`At most ${DEFAULT_SCREEN_COUNT}, plus a default Sign In screen when needed, unless the person explicitly asks for more, in build order. The first one is where the app or site opens.`),
 })
 
 const appChangesSchema = z.object({
   appName: z.string().nullable().describe("The new app name, or null to keep it"),
-  navigation: z.enum(["tabs", "stack"]).nullable().describe("The new navigation style, or null to keep it"),
+  navigation: z.enum(APP_NAVIGATIONS).nullable().describe("The new navigation style, or null to keep it"),
   addScreens: z
     .array(screenSchema)
     .describe("New screens the person's latest message asks for. Never a screen the current plan already has."),
@@ -140,8 +153,12 @@ function normalizePlan(input: z.infer<typeof planSchema>, maxScreens: number): A
   }
 
   const tabs = input.screens.filter((screen) => screen.tab).length
-  if (input.navigation === "tabs" && (tabs < MIN_TABS || tabs > MAX_TABS)) {
-    return `The plan has ${tabs} tabs. Tab navigation has between ${MIN_TABS} and ${MAX_TABS}, so set tab on the top-level screens, or use stack navigation.`
+  const usesSharedNav =
+    input.navigation === "tabs" || input.navigation === "top-nav" || input.navigation === "sidebar"
+  if (usesSharedNav && (tabs < MIN_TABS || tabs > MAX_TABS)) {
+    const kind =
+      input.navigation === "tabs" ? "tabs" : input.navigation === "sidebar" ? "sidebar items" : "top-nav items"
+    return `The plan has ${tabs} ${kind}. Shared navigation has between ${MIN_TABS} and ${MAX_TABS} top-level items, so set tab on those pages, or pick a different navigation style.`
   }
 
   const used = new Set<string>()
@@ -151,7 +168,7 @@ function normalizePlan(input: z.infer<typeof planSchema>, maxScreens: number): A
     for (let n = 2; used.has(id); n++) id = `${slugify(screen.id || screen.name)}-${n}`
     used.add(id)
     idMap.set(screen.id, id)
-    return { ...screen, id, tab: input.navigation === "tabs" ? screen.tab : null }
+    return { ...screen, id, tab: usesSharedNav ? screen.tab : null }
   })
   for (const screen of screens) {
     screen.navigatesTo = [

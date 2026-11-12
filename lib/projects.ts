@@ -1,12 +1,18 @@
 // Project rules shared by the composer (client) and the projects API (server).
 
-export const PROJECT_PLATFORMS = ["ios-android", "ios", "android"] as const
+export const PROJECT_PLATFORMS = ["ios-android", "ios", "android", "web"] as const
 export type ProjectPlatform = (typeof PROJECT_PLATFORMS)[number]
 
 export const PLATFORM_LABELS: Record<ProjectPlatform, string> = {
   "ios-android": "iOS & Android",
   ios: "iOS only",
   android: "Android only",
+  web: "Website",
+}
+
+/** Phone-shaped canvas and native store builds. Websites use a browser frame instead. */
+export function isMobilePlatform(platform: ProjectPlatform) {
+  return platform !== "web"
 }
 
 export function isProjectPlatform(value: unknown): value is ProjectPlatform {
@@ -31,6 +37,7 @@ export type ProjectSummary = {
   name: string
   description: string
   status: ProjectStatus
+  platform: ProjectPlatform
   isPublic: boolean
   /** Whether any screen has code to run. */
   hasPreview: boolean

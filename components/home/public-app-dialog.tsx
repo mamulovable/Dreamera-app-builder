@@ -33,13 +33,13 @@ export function PublicAppDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[min(92dvh,860px)] flex-col gap-0 overflow-hidden rounded-3xl p-0 sm:max-w-3xl md:flex-row">
-        <div className="min-h-0 flex-1 bg-linear-to-b from-violet-50/80 to-white p-4 sm:p-6">
+        <div className="min-h-0 flex-1 bg-linear-to-b from-brand/5 to-white p-4 sm:p-6">
           {/* The phone takes all the room there is, keeping its shape on any screen. */}
           <div className="flex size-full items-center justify-center [container-type:size]">
             <div className="relative aspect-[9/19] w-[min(100cqw,calc(100cqh*9/19))]">
               <div
                 aria-hidden
-                className="absolute -inset-6 rounded-full bg-linear-to-br from-indigo-300/30 via-fuchsia-300/25 to-violet-300/30 blur-3xl"
+                className="absolute -inset-6 rounded-full bg-linear-to-br from-brand/25 via-brand-accent/20 to-brand/15 blur-3xl"
               />
               <div className="relative size-full overflow-hidden rounded-[2.75rem] border-[8px] border-neutral-900 bg-white shadow-[0_32px_64px_-24px_rgba(76,29,149,0.45)]">
                 {preview ? (
@@ -81,13 +81,13 @@ export function PublicAppDialog({
             <p className="text-xs text-muted-foreground">Made by {project.owner}</p>
           </div>
 
-          <p className="hidden rounded-2xl bg-violet-500/10 px-3 py-2.5 text-xs leading-relaxed text-violet-800 md:block">
+          <p className="hidden rounded-2xl bg-brand/10 px-3 py-2.5 text-xs leading-relaxed text-brand-dark md:block">
             This is the real app, running on sample data. Tap around: nothing you do here reaches anyone else.
           </p>
 
           <div className="flex gap-2 md:mt-auto md:flex-col">
             <Button
-              className="h-10 flex-1 rounded-full bg-linear-to-r from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-md shadow-violet-500/30 hover:opacity-95 md:flex-none"
+              className="h-10 flex-1 rounded-full bg-brand text-white shadow-md shadow-brand/30 hover:opacity-95 md:flex-none"
               onClick={onBuildYourOwn}
             >
               <SparklesIcon />

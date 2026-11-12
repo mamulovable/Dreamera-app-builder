@@ -7,6 +7,7 @@ import {
   CheckIcon,
   ChevronDownIcon,
   FileTextIcon,
+  GlobeIcon,
   ImageIcon,
   PaperclipIcon,
   SmartphoneIcon,
@@ -347,20 +348,20 @@ export function PromptComposer() {
         {/* Soft glow behind the composer */}
         <div
           aria-hidden
-          className="absolute -inset-3 rounded-[2.75rem] bg-linear-to-r from-indigo-400/30 via-fuchsia-400/30 to-violet-400/30 opacity-60 blur-2xl transition-opacity duration-500 group-focus-within/composer:opacity-100"
+          className="absolute -inset-3 rounded-[2.75rem] bg-linear-to-r from-brand/30 via-brand-accent/20 to-brand/20 opacity-60 blur-2xl transition-opacity duration-500 group-focus-within/composer:opacity-100"
         />
         <form
           onSubmit={handleSubmit}
           {...dragHandlers}
           aria-busy={isSubmitting}
           className={cn(
-            "relative rounded-[2.25rem] bg-linear-to-br from-indigo-300/70 via-white to-fuchsia-300/70 p-px shadow-[0_24px_60px_-20px_rgba(76,29,149,0.35)] transition-[background,box-shadow] focus-within:from-indigo-400 focus-within:to-fuchsia-400",
-            isDragging && "from-violet-400 to-violet-400"
+            "relative rounded-[2.25rem] bg-linear-to-br from-brand/40 via-white to-brand-accent/40 p-px shadow-[0_24px_60px_-20px_rgba(76,29,149,0.35)] transition-[background,box-shadow] focus-within:from-brand focus-within:to-brand-accent",
+            isDragging && "from-brand to-brand"
           )}
         >
           <div className="relative rounded-[calc(2.25rem-1px)] bg-white/90 p-2.5 backdrop-blur-xl">
             {isDragging && (
-              <div className="pointer-events-none absolute inset-1.5 z-10 flex flex-col items-center justify-center gap-2 rounded-[2rem] border-2 border-dashed border-violet-300 bg-violet-50/90 text-violet-700">
+              <div className="pointer-events-none absolute inset-1.5 z-10 flex flex-col items-center justify-center gap-2 rounded-[2rem] border-2 border-dashed border-brand/30 bg-brand/5 text-brand-dark">
                 <UploadCloudIcon className="size-7" />
                 <p className="text-sm font-medium">Drop files to attach</p>
               </div>
@@ -380,7 +381,7 @@ export function PromptComposer() {
             )}
 
             <label htmlFor="prompt" className="sr-only">
-              Describe the app you want to build
+              Describe the dream app you want to build
             </label>
             <textarea
               id="prompt"
@@ -392,7 +393,7 @@ export function PromptComposer() {
               readOnly={isSubmitting}
               maxLength={MAX_PROMPT_LENGTH}
               rows={3}
-              placeholder="Describe your app idea… e.g. A recipe app that suggests meals from what's in my fridge"
+              placeholder="Describe your dream app… e.g. A marketplace where local makers sell what they create"
               className="field-sizing-content block max-h-64 min-h-24 w-full resize-none bg-transparent px-3 pt-3 pb-2 text-base leading-relaxed outline-none placeholder:text-muted-foreground/70"
             />
 
@@ -413,7 +414,7 @@ export function PromptComposer() {
                   type="button"
                   variant="ghost"
                   size="lg"
-                  className="h-9 rounded-full bg-muted/60 px-3.5 text-muted-foreground hover:bg-violet-500/10 hover:text-violet-700"
+                  className="h-9 rounded-full bg-muted/60 px-3.5 text-muted-foreground hover:bg-brand/10 hover:text-brand-dark"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={files.length >= MAX_ASSETS || isSubmitting}
                 >
@@ -429,11 +430,11 @@ export function PromptComposer() {
                         type="button"
                         variant="ghost"
                         size="lg"
-                        className="h-9 rounded-full bg-muted/60 px-3.5 text-muted-foreground hover:bg-violet-500/10 hover:text-violet-700"
+                        className="h-9 rounded-full bg-muted/60 px-3.5 text-muted-foreground hover:bg-brand/10 hover:text-brand-dark"
                       />
                     }
                   >
-                    <SmartphoneIcon />
+                    {platform === "web" ? <GlobeIcon /> : <SmartphoneIcon />}
                     <span className="hidden sm:inline">{PLATFORM_LABELS[platform]}</span>
                     <ChevronDownIcon className="size-3.5 opacity-60" />
                   </DropdownMenuTrigger>
@@ -444,9 +445,10 @@ export function PromptComposer() {
                         className="rounded-xl py-2"
                         onClick={() => setPlatform(option)}
                       >
+                        {option === "web" ? <GlobeIcon className="size-4" /> : <SmartphoneIcon className="size-4" />}
                         {PLATFORM_LABELS[option]}
                         {option === platform && (
-                          <CheckIcon className="ml-auto text-violet-600" />
+                          <CheckIcon className="ml-auto text-brand" />
                         )}
                       </DropdownMenuItem>
                     ))}
@@ -456,7 +458,7 @@ export function PromptComposer() {
 
               <div className="flex items-center gap-3">
                 {isSubmitting ? (
-                  <span role="status" className="text-xs font-medium text-violet-700">
+                  <span role="status" className="text-xs font-medium text-brand-dark">
                     {statusText(submitStatus, files.length)}
                   </span>
                 ) : (
@@ -469,7 +471,7 @@ export function PromptComposer() {
                   size="icon-lg"
                   disabled={!canSubmit || isSessionPending}
                   aria-label={isSubmitting ? "Creating project" : "Generate app"}
-                  className="size-11 rounded-full bg-linear-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-lg shadow-violet-500/40 transition-transform hover:scale-105 hover:opacity-95 disabled:from-muted disabled:to-muted disabled:text-muted-foreground disabled:opacity-100 disabled:shadow-none"
+                  className="size-11 rounded-full bg-brand text-white shadow-lg shadow-brand/40 transition-transform hover:scale-105 hover:opacity-95 disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100 disabled:shadow-none"
                 >
                   {isSubmitting ? <Spinner className="size-5" /> : <ArrowUpIcon className="size-5" />}
                 </Button>
@@ -491,11 +493,11 @@ export function PromptComposer() {
             key={item.label}
             type="button"
             onClick={() => applySuggestion(item.prompt)}
-            className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/60 py-1.5 pr-4 pl-1.5 text-sm text-muted-foreground shadow-[0_4px_16px_-8px_rgba(76,29,149,0.3)] backdrop-blur-md transition-all hover:-translate-y-0.5 hover:border-violet-200 hover:bg-white hover:text-violet-700 hover:shadow-[0_8px_24px_-8px_rgba(124,58,237,0.4)] focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+            className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/60 py-1.5 pr-4 pl-1.5 text-sm text-muted-foreground shadow-[0_4px_16px_-8px_rgba(76,29,149,0.3)] backdrop-blur-md transition-all hover:-translate-y-0.5 hover:border-brand/30 hover:bg-white hover:text-brand-dark hover:shadow-[0_8px_24px_-8px_rgba(124,58,237,0.4)] focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
           >
             <span
               aria-hidden
-              className="flex size-6 items-center justify-center rounded-full bg-linear-to-br from-violet-100 to-fuchsia-100 text-xs"
+              className="flex size-6 items-center justify-center rounded-full bg-linear-to-br from-brand/15 to-brand-accent/15 text-xs"
             >
               {item.emoji}
             </span>
@@ -551,7 +553,7 @@ function PromptAttachment({
         ) : file.type.startsWith("image/") ? (
           <ImageIcon />
         ) : (
-          <FileTextIcon className="text-violet-600" />
+          <FileTextIcon className="text-brand" />
         )}
       </AttachmentMedia>
       <AttachmentContent>

@@ -22,6 +22,7 @@ import { useHighlightedCode } from "@/hooks/use-highlighted-code"
 import type { WebPublishState } from "@/hooks/use-web-publish"
 import type { AppPlan, ProjectScreen } from "@/lib/agent-protocol"
 import type { ElementEdits, PreviewFile, PreviewProject } from "@/lib/preview-protocol"
+import type { ProjectPlatform } from "@/lib/projects"
 import { resetPreviewStorage } from "@/lib/preview-storage"
 import { WEB_PUBLISH_LABELS, isWebPublishActive } from "@/lib/publish-protocol"
 import { activeTheme } from "@/lib/themes"
@@ -44,6 +45,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 export function PreviewPanel({
   projectId,
+  platform,
   plan,
   screens,
   app,
@@ -54,6 +56,7 @@ export function PreviewPanel({
   onOpenPublish,
 }: {
   projectId: string
+  platform: ProjectPlatform
   plan: AppPlan | null
   screens: ProjectScreen[]
   /** The app as built so far. */
@@ -69,24 +72,25 @@ export function PreviewPanel({
 }) {
   const [reloadSignal, setReloadSignal] = React.useState(0)
   const hasApp = screens.some((s) => s.status === "done")
+  const isWeb = platform === "web"
 
   return (
     <Tabs defaultValue="preview" className="@container flex h-full min-h-0 gap-0 bg-white">
       <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-border/60 px-3">
         <TabsList className="h-8 rounded-full bg-muted/70 p-0.5">
-          <TabsTrigger value="preview" className="rounded-full px-3 data-active:text-violet-700">
-            <SmartphoneIcon />
-            App Preview
+          <TabsTrigger value="preview" className="rounded-full px-3 data-active:text-brand-dark">
+            {isWeb ? <GlobeIcon /> : <SmartphoneIcon />}
+            {isWeb ? "Site Preview" : "App Preview"}
           </TabsTrigger>
-          <TabsTrigger value="code" className="rounded-full px-3 data-active:text-violet-700">
+          <TabsTrigger value="code" className="rounded-full px-3 data-active:text-brand-dark">
             <Code2Icon />
             Code
           </TabsTrigger>
         </TabsList>
         {hasApp && (
           <div className="flex items-center gap-1">
-            <ExpoQrPopover plan={plan} screens={screens} />
-            <PreviewAction label="Reset app data" onClick={() => resetPreviewStorage(projectId)}>
+            {!isWeb && <ExpoQrPopover plan={plan} screens={screens} />}
+            <PreviewAction label={isWeb ? "Reset site data" : "Reset app data"} onClick={() => resetPreviewStorage(projectId)}>
               <RotateCcwIcon />
             </PreviewAction>
             <PreviewAction label="Reload preview" onClick={() => setReloadSignal((n) => n + 1)}>
@@ -100,6 +104,7 @@ export function PreviewPanel({
       <TabsContent value="preview" keepMounted className="min-h-0 data-hidden:hidden">
         <AppPreview
           projectId={projectId}
+          isWeb={isWeb}
           app={hasApp ? app : null}
           plan={plan}
           syncing={syncing}
@@ -125,7 +130,7 @@ function PreviewAction({ label, children, ...props }: React.ComponentProps<typeo
             variant="ghost"
             size="icon"
             aria-label={label}
-            className="rounded-full text-muted-foreground hover:bg-violet-500/10 hover:text-violet-700"
+            className="rounded-full text-muted-foreground hover:bg-brand/10 hover:text-brand-dark"
             {...props}
           />
         }
@@ -139,6 +144,7 @@ function PreviewAction({ label, children, ...props }: React.ComponentProps<typeo
 
 function AppPreview({
   projectId,
+  isWeb,
   app,
   plan,
   syncing,
@@ -148,6 +154,7 @@ function AppPreview({
   onOpenPublish,
 }: {
   projectId: string
+  isWeb: boolean
   app: PreviewProject | null
   plan: AppPlan | null
   syncing: boolean
@@ -157,16 +164,39 @@ function AppPreview({
   onOpenPublish: () => void
 }) {
   return (
-    <div className="flex h-full flex-col gap-3 bg-linear-to-b from-violet-50/60 to-white p-4">
+    <div className="flex h-full flex-col gap-3 bg-linear-to-b from-brand/5 to-white p-4">
       <WebsiteBar webPublish={webPublish} onOpenPublish={onOpenPublish} />
-      {/* The phone takes all the room there is, keeping its shape in a tall or a wide panel. */}
+      {/* Phone or browser frame: keeps its shape in a tall or a wide panel. */}
       <div className="flex min-h-0 w-full flex-1 items-center justify-center [container-type:size]">
-        <div className="relative aspect-[9/19] w-[min(100cqw,calc(100cqh*9/19))]">
+        <div
+          className={cn(
+            "relative",
+            isWeb
+              ? "aspect-[16/10] w-[min(100cqw,calc(100cqh*16/10))]"
+              : "aspect-[9/19] w-[min(100cqw,calc(100cqh*9/19))]"
+          )}
+        >
           <div
             aria-hidden
-            className="absolute -inset-6 rounded-full bg-linear-to-br from-indigo-300/30 via-fuchsia-300/25 to-violet-300/30 blur-3xl"
+            className="absolute -inset-6 rounded-full bg-linear-to-br from-brand/25 via-brand-accent/20 to-brand/15 blur-3xl"
           />
-          <div className="relative size-full overflow-hidden rounded-[2.75rem] border-[8px] border-neutral-900 bg-white shadow-[0_32px_64px_-24px_rgba(76,29,149,0.45)]">
+          <div
+            className={cn(
+              "relative size-full overflow-hidden bg-white shadow-[0_32px_64px_-24px_rgba(76,29,149,0.45)]",
+              isWeb ? "rounded-xl border border-neutral-300 ring-1 ring-black/5" : "rounded-[2.75rem] border-[8px] border-neutral-900"
+            )}
+          >
+            {isWeb && (
+              <div className="flex h-9 items-center gap-2 border-b border-neutral-200 bg-neutral-100 px-3">
+                <span className="size-2.5 rounded-full bg-red-400" />
+                <span className="size-2.5 rounded-full bg-amber-400" />
+                <span className="size-2.5 rounded-full bg-emerald-400" />
+                <span className="ml-2 flex h-5 flex-1 items-center rounded-full bg-white px-3 text-[11px] text-neutral-400">
+                  {plan?.appName ? `${plan.appName.toLowerCase().replace(/\s+/g, "")}.expo.app` : "your-site.expo.app"}
+                </span>
+              </div>
+            )}
+            <div className={cn("relative", isWeb ? "h-[calc(100%-2.25rem)]" : "h-full")}>
             {app ? (
               <AppFrame
                 projectId={projectId}
@@ -174,25 +204,28 @@ function AppPreview({
                 theme={activeTheme(plan?.themePackage)}
                 route="/"
                 interactive
-                title={`${plan?.appName ?? "App"} preview`}
+                title={`${plan?.appName ?? (isWeb ? "Site" : "App")} preview`}
                 syncing={syncing}
                 reloadSignal={reloadSignal}
                 edits={edits}
               />
             ) : (
               <>
-                <div className="absolute top-2 left-1/2 h-5 w-20 -translate-x-1/2 rounded-full bg-neutral-900" />
+                {!isWeb && <div className="absolute top-2 left-1/2 h-5 w-20 -translate-x-1/2 rounded-full bg-neutral-900" />}
                 <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-                  <span className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-100 to-fuchsia-100 text-violet-600">
+                  <span className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-brand/15 to-brand-accent/15 text-brand">
                     <SparklesIcon className="size-5" />
                   </span>
-                  <p className="text-sm font-medium">Your app preview will appear here</p>
+                  <p className="text-sm font-medium">{isWeb ? "Your site preview will appear here" : "Your app preview will appear here"}</p>
                   <p className="text-xs text-muted-foreground">
-                    Once the agent builds your screens, you can tap through them live.
+                    {isWeb
+                      ? "Once the agent builds your pages, you can click through them live."
+                      : "Once the agent builds your screens, you can tap through them live."}
                   </p>
                 </div>
               </>
             )}
+            </div>
           </div>
         </div>
       </div>
@@ -212,7 +245,7 @@ function WebsiteBar({ webPublish, onOpenPublish }: { webPublish: WebPublishState
   return (
     <div className="relative z-10 flex min-h-10 shrink-0 items-center gap-2 rounded-full border border-border/60 bg-white py-1 pr-1 pl-3 shadow-xs">
       {active ? (
-        <Loader2Icon aria-hidden className="size-3.5 shrink-0 animate-spin text-violet-600" />
+        <Loader2Icon aria-hidden className="size-3.5 shrink-0 animate-spin text-brand" />
       ) : failed ? (
         <AlertCircleIcon aria-hidden className="size-3.5 shrink-0 text-destructive" />
       ) : (
@@ -224,7 +257,7 @@ function WebsiteBar({ webPublish, onOpenPublish }: { webPublish: WebPublishState
           target="_blank"
           rel="noreferrer"
           title={url}
-          className="min-w-0 flex-1 truncate text-xs font-medium hover:text-violet-700 hover:underline"
+          className="min-w-0 flex-1 truncate text-xs font-medium hover:text-brand-dark hover:underline"
         >
           {url.replace(/^https:\/\//, "").replace(/\/$/, "")}
         </a>
@@ -276,7 +309,7 @@ function CodeView({ screens, appFiles }: { screens: ProjectScreen[]; appFiles: P
   if (!active) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-        <span className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-100 to-fuchsia-100 text-violet-600">
+        <span className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-brand/15 to-brand-accent/15 text-brand">
           <Code2Icon className="size-5" />
         </span>
         <p className="text-sm font-medium">No code yet</p>
@@ -342,7 +375,7 @@ function FileTree({
               className={cn(
                 "flex w-full items-center gap-1.5 py-1 pr-2 text-left text-xs transition-colors",
                 node.path === activePath
-                  ? "bg-violet-500/10 font-medium text-violet-700"
+                  ? "bg-brand/10 font-medium text-brand-dark"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
@@ -353,7 +386,7 @@ function FileTree({
               )}
               <span className="truncate">{node.name}</span>
               {node.path === writingPath && (
-                <span aria-label="Being written" className="ml-auto size-1.5 shrink-0 animate-pulse rounded-full bg-violet-500" />
+                <span aria-label="Being written" className="ml-auto size-1.5 shrink-0 animate-pulse rounded-full bg-brand" />
               )}
             </button>
           </li>
@@ -388,7 +421,7 @@ function FolderItem({
         className="flex w-full items-center gap-1 py-1 pr-2 text-left text-xs text-foreground/80 transition-colors hover:bg-muted"
       >
         <ChevronRightIcon className={cn("size-3 shrink-0 text-muted-foreground transition-transform", open && "rotate-90")} />
-        <Icon className="size-3.5 shrink-0 text-violet-500" />
+        <Icon className="size-3.5 shrink-0 text-brand" />
         <span className="truncate">{node.name}</span>
       </button>
       {open && (

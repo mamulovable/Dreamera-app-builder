@@ -3,7 +3,7 @@
 import { sql } from "drizzle-orm"
 
 import { projects } from "@/db"
-import type { ProjectStatus, ProjectSummary } from "@/lib/projects"
+import type { ProjectPlatform, ProjectStatus, ProjectSummary } from "@/lib/projects"
 
 // These name their columns outright, because Drizzle drops the table from column
 // references when a query has one table, which would break the correlated subqueries.
@@ -20,6 +20,7 @@ export const SUMMARY_COLUMNS = {
   tagline: sql<string | null>`projects.plan->>'tagline'`,
   accentColor: sql<string | null>`projects.plan->'design'->>'primaryColor'`,
   status: projects.status,
+  platform: projects.platform,
   isPublic: projects.isPublic,
   hasPreview: sql<boolean>`${HAS_PREVIEW}`,
   updatedAt: sql<Date>`${LAST_EDITED}`.mapWith(projects.updatedAt),
@@ -32,6 +33,7 @@ type SummaryRow = {
   tagline: string | null
   accentColor: string | null
   status: ProjectStatus
+  platform: ProjectPlatform
   isPublic: boolean
   hasPreview: boolean
   updatedAt: Date
@@ -43,6 +45,7 @@ export function toProjectSummary(row: SummaryRow, role: ProjectSummary["role"], 
     name: row.appName || row.title,
     description: row.tagline ?? "",
     status: row.status,
+    platform: row.platform,
     isPublic: row.isPublic,
     hasPreview: row.hasPreview,
     updatedAt: row.updatedAt.toISOString(),

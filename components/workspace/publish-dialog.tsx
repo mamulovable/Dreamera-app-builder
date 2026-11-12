@@ -159,12 +159,18 @@ export function PublishDialog({
       {/* The column is fixed to the dialog's width, or one long word in a build error stretches everything in it. */}
       <DialogContent className="max-h-[90dvh] grid-cols-[minmax(0,1fr)] gap-5 overflow-y-auto rounded-3xl p-6 sm:max-w-md">
         <DialogHeader className="flex-row items-center gap-3">
-          <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-100 to-fuchsia-100 text-violet-600">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-brand/15 to-brand-accent/15 text-brand">
             <RocketIcon className="size-5" />
           </span>
           <div className="min-w-0 space-y-0.5">
-            <DialogTitle className="text-base font-semibold tracking-tight">Publish</DialogTitle>
-            <DialogDescription>Put your app on the web, or build it for the app stores. You can close this while it runs.</DialogDescription>
+            <DialogTitle className="text-base font-semibold tracking-tight">
+              {platform === "web" ? "Publish website" : "Publish"}
+            </DialogTitle>
+            <DialogDescription>
+              {platform === "web"
+                ? "Deploy your website to Expo Hosting. You can close this while it runs."
+                : "Put your app on the web, or build it for the app stores. You can close this while it runs."}
+            </DialogDescription>
           </div>
         </DialogHeader>
 
@@ -183,18 +189,23 @@ export function PublishDialog({
           </p>
         ) : !status.available ? (
           <p role="status" className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
-            Publishing isn't set up on this AppForge server yet.
+            Publishing isn't set up on this Dreamera server yet.
           </p>
         ) : !status.expo ? (
           <ConnectExpo onConnected={() => void load()} />
+        ) : platform === "web" ? (
+          <div className="min-w-0 space-y-4">
+            <WebPublishPanel webPublish={webPublish} onBlocked={() => void load()} />
+            <ExpoAccount account={status.expo.account} onDisconnected={() => void load()} />
+          </div>
         ) : (
           <Tabs defaultValue="web" className="min-w-0 gap-4">
             <TabsList className="h-9 w-full rounded-full bg-muted/70 p-0.5">
-              <TabsTrigger value="web" className="rounded-full px-3 data-active:text-violet-700">
+              <TabsTrigger value="web" className="rounded-full px-3 data-active:text-brand-dark">
                 <GlobeIcon />
                 Web
               </TabsTrigger>
-              <TabsTrigger value="stores" className="rounded-full px-3 data-active:text-violet-700">
+              <TabsTrigger value="stores" className="rounded-full px-3 data-active:text-brand-dark">
                 <SmartphoneIcon />
                 App stores
               </TabsTrigger>
@@ -270,8 +281,8 @@ function ErrorDetails({ summary, children }: { summary: string; children: React.
 function AppStoresLocked({ onUpgrade }: { onUpgrade: () => void }) {
   return (
     <div className="space-y-4">
-      <div className="flex gap-3 rounded-2xl border border-violet-200 bg-violet-500/5 px-3 py-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-violet-500/10 text-violet-700">
+      <div className="flex gap-3 rounded-2xl border border-brand/25 bg-brand/5 px-3 py-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand-dark">
           <SmartphoneIcon className="size-4" />
         </span>
         <div className="min-w-0">
@@ -281,7 +292,7 @@ function AppStoresLocked({ onUpgrade }: { onUpgrade: () => void }) {
           </p>
         </div>
       </div>
-      <Button className="h-10 w-full rounded-full bg-linear-to-r from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-md shadow-violet-500/30 hover:opacity-95" onClick={onUpgrade}>
+      <Button className="h-10 w-full rounded-full bg-brand text-white shadow-md shadow-brand/30 hover:opacity-95" onClick={onUpgrade}>
         <SparklesIcon />
         Upgrade to Pro
       </Button>
@@ -314,7 +325,7 @@ function ConnectExpo({ onConnected }: { onConnected: () => void }) {
     <form className="space-y-3" onSubmit={(event) => void submit(event)}>
       <p className="flex gap-2 text-xs leading-relaxed text-muted-foreground">
         <ShieldCheckIcon className="mt-px size-3.5 shrink-0 text-emerald-600" />
-        Websites and builds run on your own Expo account. AppForge encrypts your token, and only uses it to publish your app and follow its progress.
+        Websites and builds run on your own Expo account. Dreamera encrypts your token, and only uses it to publish your app and follow its progress.
       </p>
       <div className="space-y-1.5">
         <label htmlFor="expo-token" className="text-sm font-medium">
@@ -332,7 +343,7 @@ function ConnectExpo({ onConnected }: { onConnected: () => void }) {
           href="https://expo.dev/settings/access-tokens"
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 text-xs font-medium text-violet-700 hover:underline"
+          className="inline-flex items-center gap-1 text-xs font-medium text-brand-dark hover:underline"
         >
           Create a token on Expo
           <ExternalLinkIcon className="size-3" />
@@ -392,7 +403,7 @@ function WebPublishPanel({ webPublish, onBlocked }: { webPublish: WebPublishStat
               href={url}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex min-w-0 items-center gap-1 text-sm font-medium hover:text-violet-700 hover:underline"
+              className="inline-flex min-w-0 items-center gap-1 text-sm font-medium hover:text-brand-dark hover:underline"
             >
               <span className="truncate">{url.replace(/^https:\/\//, "").replace(/\/$/, "")}</span>
               <ExternalLinkIcon className="size-3 shrink-0" />
@@ -403,7 +414,7 @@ function WebPublishPanel({ webPublish, onBlocked }: { webPublish: WebPublishStat
       ) : (
         !active && (
           <p className="text-sm leading-relaxed text-muted-foreground">
-            Publish your app as a website on your Expo account, with its own address anyone can open. When you make changes, publish again to update the same site.
+            Publish your website on your Expo account, with its own address anyone can open. When you make changes, publish again to update the same site.
           </p>
         )
       )}
@@ -430,7 +441,7 @@ function WebPublishPanel({ webPublish, onBlocked }: { webPublish: WebPublishStat
         }}
       >
         {active ? <Loader2Icon className="animate-spin" /> : failed ? <RotateCwIcon /> : <GlobeIcon />}
-        {active ? "Publishing…" : failed ? "Try again" : url ? "Publish update" : "Publish as Web"}
+        {active ? "Publishing…" : failed ? "Try again" : url ? "Publish update" : "Publish website"}
       </Button>
     </div>
   )
@@ -446,7 +457,7 @@ function WebPublishSteps({ status }: { status: ActiveWebPublishStatus }) {
           {index < currentIndex ? (
             <CheckIcon className="size-3.5 shrink-0 text-emerald-600" />
           ) : index === currentIndex ? (
-            <Loader2Icon className="size-3.5 shrink-0 animate-spin text-violet-600" />
+            <Loader2Icon className="size-3.5 shrink-0 animate-spin text-brand" />
           ) : (
             <span aria-hidden className="mx-[3px] size-2 shrink-0 rounded-full bg-border" />
           )}
@@ -496,10 +507,10 @@ function ExportForm({
             key={id}
             className={cn(
               "flex cursor-pointer items-center gap-3 rounded-2xl border px-3 py-2.5 transition-colors",
-              format === id ? "border-violet-400 bg-violet-500/5" : "border-border/60 hover:bg-muted/50"
+              format === id ? "border-brand bg-brand/5" : "border-border/60 hover:bg-muted/50"
             )}
           >
-            <input type="radio" name="publish-format" value={id} checked={format === id} onChange={() => setFormat(id)} className="accent-violet-600" />
+            <input type="radio" name="publish-format" value={id} checked={format === id} onChange={() => setFormat(id)} className="accent-brand" />
             {FORMAT_PLATFORM[id] === "ios" ? <AppleIcon className="size-4 shrink-0 text-muted-foreground" /> : <SmartphoneIcon className="size-4 shrink-0 text-muted-foreground" />}
             <span className="min-w-0">
               <span className="block text-sm font-medium">{title}</span>
