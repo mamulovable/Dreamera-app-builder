@@ -39,9 +39,13 @@ function jobsApiBase() {
 }
 
 function jobsRequest(path: string, init?: RequestInit) {
+  const apiKey = process.env.JOBS_API_KEY
+  if (!apiKey) {
+    throw new Error("JOBS_API_URL and JOBS_API_KEY must be set to build screens.")
+  }
   return fetch(`${jobsApiBase()}${path}`, {
     ...init,
-    headers: { "content-type": "application/json", "x-api-key": process.env.JOBS_API_KEY },
+    headers: { "content-type": "application/json", "x-api-key": apiKey },
   })
 }
 
