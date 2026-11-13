@@ -403,6 +403,33 @@ export const webPublishes = pgTable("web_publishes", {
     .$onUpdate(() => new Date()),
 });
 
+export const adminAuditAction = pgEnum("admin_audit_action", [
+  "grant-credits",
+  "set-public",
+  "delete-project",
+  "fail-build",
+]);
+
+/** What an operator did in /admin. Tokens and Stripe fields are never written here. */
+export const adminAuditLog = pgTable(
+  "admin_audit_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    adminUserId: integer("admin_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    action: adminAuditAction("action").notNull(),
+    targetUserId: integer("target_user_id").references(() => users.id, { onDelete: "set null" }),
+    targetProjectId: uuid("target_project_id"),
+    detail: jsonb("detail").$type<Record<string, unknown>>().default({}).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("admin_audit_log_admin_user_id_idx").on(table.adminUserId),
+    index("admin_audit_log_created_at_idx").on(table.createdAt),
+  ]
+);
+
 export type NewUser = typeof users.$inferInsert;
 export type Project = typeof projects.$inferSelect;
 export type ProjectAsset = typeof projectAssets.$inferSelect;
@@ -412,3 +439,4 @@ export type ProjectBackend = typeof projectBackends.$inferSelect;
 export type ProjectPublishing = typeof projectPublishing.$inferSelect;
 export type AppBuild = typeof appBuilds.$inferSelect;
 export type WebPublish = typeof webPublishes.$inferSelect;
+export type AdminAuditLog = typeof adminAuditLog.$inferSelect;

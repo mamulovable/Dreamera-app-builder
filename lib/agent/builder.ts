@@ -5,7 +5,7 @@ import { db, messages, projects, screens, type Project, type Screen } from "@/db
 import { componentLabel, screenFilePath, toProjectScreen, type AppPlan, type PendingChanges } from "@/lib/agent-protocol"
 import { mergePlan } from "@/lib/agent/changes"
 import { generateComponents, writeComponent } from "@/lib/agent/components"
-import { BUILDER_MODEL, configureAgents } from "@/lib/agent/config"
+import { BUILDER_MODEL, PRIMARY_BUILDER_MODEL, configureAgents } from "@/lib/agent/config"
 import { changeCollections, generateFoundation } from "@/lib/agent/foundation"
 import { BUILDER_INSTRUCTIONS, WEB_BUILDER_INSTRUCTIONS, builderPrompt } from "@/lib/agent/instructions"
 import { BuildLostError, type BuildLog } from "@/lib/agent/builds"
@@ -106,7 +106,7 @@ export async function runBuildStep(log: BuildLog, project: Project): Promise<boo
 
   const plan = project.plan
   if (!plan) throw new Error(`Project ${project.id} has no plan to build.`)
-  console.info(`Build ${log.buildId} is calling ${BUILDER_MODEL}.`)
+  console.info(`Build ${log.buildId} is calling ${PRIMARY_BUILDER_MODEL}.`)
 
   if (!plan.themePackage || !plan.collections) {
     log.emit({ type: "status", label: "Designing your themes and sample data…" })

@@ -75,6 +75,16 @@ export type SessionUser = {
   /** When Pro renews, or ends if `cancelAtPeriodEnd`. */
   currentPeriodEnd: string | null
   cancelAtPeriodEnd: boolean
+  /** True when their email is in ADMIN_EMAILS. */
+  isAdmin: boolean
+}
+
+function isAdminEmail(email: string) {
+  const allowed = (process.env.ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean)
+  return allowed.includes(email.toLowerCase())
 }
 
 export function toSessionUser(user: User, authUser: AuthUser): SessionUser {
@@ -88,6 +98,7 @@ export function toSessionUser(user: User, authUser: AuthUser): SessionUser {
     plan: user.plan,
     currentPeriodEnd: user.currentPeriodEnd?.toISOString() ?? null,
     cancelAtPeriodEnd: user.cancelAtPeriodEnd,
+    isAdmin: isAdminEmail(user.email),
   }
 }
 

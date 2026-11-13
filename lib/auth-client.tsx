@@ -15,6 +15,7 @@ export type SessionUser = {
   plan: PlanId
   currentPeriodEnd: string | null
   cancelAtPeriodEnd: boolean
+  isAdmin: boolean
 }
 
 type AuthResult =

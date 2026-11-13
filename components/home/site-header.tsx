@@ -10,6 +10,7 @@ import {
   LogOutIcon,
   MenuIcon,
   SettingsIcon,
+  ShieldIcon,
   SparklesIcon,
 } from "lucide-react"
 
@@ -196,6 +197,12 @@ function UserMenu({ user }: { user: SessionUser }) {
           <FolderIcon />
           My projects
         </DropdownMenuItem>
+        {user.isAdmin && (
+          <DropdownMenuItem className="py-2" render={<Link href="/admin" />}>
+            <ShieldIcon />
+            Admin
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem className="py-2">
           <SettingsIcon />
           Settings

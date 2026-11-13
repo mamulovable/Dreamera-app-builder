@@ -32,7 +32,7 @@ export function isUpgradeReason(value: unknown): value is UpgradeReason {
   return UPGRADE_REASONS.includes(value as UpgradeReason)
 }
 
-export const CREDIT_REASONS = ["build", "edit", "image", "refund", "renewal", "plan-ended"] as const
+export const CREDIT_REASONS = ["build", "edit", "image", "refund", "renewal", "plan-ended", "admin"] as const
 export type CreditReason = (typeof CREDIT_REASONS)[number]
 
 /**
