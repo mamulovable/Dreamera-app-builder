@@ -15,10 +15,10 @@ import { cn } from "cn"
 
 const NAV = [
   { href: "/admin", label: "Overview", icon: GaugeIcon, exact: true },
-  { href: "/admin/users", label: "Users", icon: UsersIcon },
-  { href: "/admin/projects", label: "Projects", icon: FolderIcon },
-  { href: "/admin/builds", label: "Builds", icon: HammerIcon },
-  { href: "/admin/public", label: "Public", icon: GlobeIcon },
+  { href: "/admin/users", label: "Users", icon: UsersIcon, exact: false },
+  { href: "/admin/projects", label: "Projects", icon: FolderIcon, exact: false },
+  { href: "/admin/builds", label: "Builds", icon: HammerIcon, exact: false },
+  { href: "/admin/public", label: "Public", icon: GlobeIcon, exact: false },
 ] as const
 
 export function AdminShell({ email, children }: { email: string; children: React.ReactNode }) {
