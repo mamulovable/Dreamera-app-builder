@@ -25,10 +25,13 @@ export const ALLOWED_PACKAGES = [
 ] as const
 
 /** Project modules generated screens may import. */
-export const ALLOWED_PROJECT_MODULES = ["@/theme", "@/lib/backend", "@/data/schema"] as const
+export const ALLOWED_PROJECT_MODULES = ["@/theme", "@/lib/backend", "@/data/schema", "@/lib/layout"] as const
 
 /** Project modules shared components may import. Screens hand them their data, so they can't reach the backend. */
-export const ALLOWED_COMPONENT_MODULES = ["@/theme", "@/data/schema"] as const
+export const ALLOWED_COMPONENT_MODULES = ["@/theme", "@/data/schema", "@/lib/layout"] as const
+
+/** Width, in points, where a website swaps the desktop header for a menu and stacks its sections. */
+export const SITE_COMPACT_WIDTH = 840
 
 const LAYOUT_FILE = `import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -85,78 +88,160 @@ ${shellScreens(plan).join("\n")}
 `
 }
 
-/** Horizontal header for a website. Expo Router still uses Tabs; the preview draws the same chrome. */
-function topNavLayoutFile(plan: AppPlan) {
+/** Pages that belong in the shared website header or sidebar. */
+function shellLinks(plan: AppPlan) {
+  return plan.screens.flatMap((screen, position) =>
+    screen.tab
+      ? `  { label: ${JSON.stringify(screen.tab.label)}, href: ${JSON.stringify(screenRoute(screen.id, position))}, icon: ${JSON.stringify(screen.tab.icon)} }`
+      : []
+  )
+}
+
+/**
+ * Website chrome for the exported Expo app. A wide window gets a header or a
+ * sidebar. A narrow one gets the same links behind a menu button. Pages are
+ * rendered with Slot, so this is not a tab bar.
+ */
+function webShellFile(plan: AppPlan, kind: "top" | "side") {
+  const cta = websiteCta(plan)
+  const ctaLiteral = cta ? `{ label: ${JSON.stringify(cta.label)}, href: ${JSON.stringify(cta.route)} }` : "null"
   return `import { Ionicons } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
+import { router, Slot, usePathname } from "expo-router";
+import { useState } from "react";
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { colors } from "@/theme";
 
-export default function TopNavLayout() {
+const BRAND = ${JSON.stringify(plan.appName)};
+const LINKS = [
+${shellLinks(plan).join(",\n")}
+];
+const CTA = ${ctaLiteral};
+
+export default function SiteLayout() {
+  const { width } = useWindowDimensions();
+  const compact = width < ${SITE_COMPACT_WIDTH};
+  const sidebar = ${kind === "side" ? "!compact" : "false"};
+  const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+
+  const go = (href: string) => {
+    setOpen(false);
+    router.push(href as "/");
+  };
+
+  const brand = (
+    <Pressable accessibilityRole="button" accessibilityLabel={BRAND} onPress={() => go("/")} style={styles.brand}>
+      <View style={styles.mark}>
+        <Text style={styles.markText}>{BRAND.charAt(0).toUpperCase()}</Text>
+      </View>
+      <Text numberOfLines={1} style={styles.brandName}>{BRAND}</Text>
+    </Pressable>
+  );
+
+  const links = LINKS.map((link) => {
+    const selected = pathname === link.href;
+    return (
+      <Pressable key={link.href} accessibilityRole="button" onPress={() => go(link.href)} style={[sidebar ? styles.sideLink : styles.link, selected && styles.linkSelected]}>
+        {sidebar ? <Ionicons name={link.icon as never} size={18} color={selected ? colors.primary : colors.textMuted} /> : null}
+        <Text numberOfLines={1} style={[styles.linkText, selected && { color: colors.primary }]}>{link.label}</Text>
+      </Pressable>
+    );
+  });
+
+  const cta = CTA ? (
+    <Pressable accessibilityRole="button" onPress={() => go(CTA.href)} style={({ pressed }) => [styles.cta, pressed && { opacity: 0.85 }]}>
+      <Text style={styles.ctaText}>{CTA.label}</Text>
+    </Pressable>
+  ) : null;
+
+  if (sidebar) {
+    return (
+      <View style={styles.row}>
+        <View style={styles.sidebar}>
+          {brand}
+          <View style={styles.sideLinks}>{links}</View>
+          {cta}
+        </View>
+        <View style={styles.content}>
+          <Slot />
+        </View>
+      </View>
+    );
+  }
+
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarPosition: "top",
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderBottomColor: colors.border,
-          borderTopWidth: 0,
-          borderBottomWidth: 1,
-          height: 64,
-          paddingHorizontal: 24,
-        },
-        tabBarLabelStyle: { fontSize: 13, fontWeight: "600" },
-        tabBarItemStyle: { flexDirection: "row", gap: 8 },
-      }}
-    >
-${shellScreens(plan).join("\n")}
-    </Tabs>
+    <View style={styles.frame}>
+      <View style={[styles.header, compact && styles.headerCompact]}>
+        {brand}
+        {compact ? (
+          <Pressable accessibilityRole="button" accessibilityLabel={open ? "Close menu" : "Open menu"} onPress={() => setOpen((value) => !value)} style={styles.menuButton}>
+            <Ionicons name={open ? "close" : "menu"} size={22} color={colors.text} />
+          </Pressable>
+        ) : (
+          <>
+            <View style={styles.headerLinks}>{links}</View>
+            <View style={styles.headerEnd}>{cta}</View>
+          </>
+        )}
+      </View>
+      <View style={styles.content}>
+        <Slot />
+      </View>
+      {open && (
+        <View style={styles.backdrop}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Close menu" onPress={() => setOpen(false)} style={styles.backdropPress} />
+          <View style={styles.sheet}>
+            {links}
+            {cta}
+          </View>
+        </View>
+      )}
+    </View>
   );
 }
-`
-}
 
-/** Left sidebar for a website product area. */
-function sidebarLayoutFile(plan: AppPlan) {
-  return `import { Ionicons } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
-
-import { colors } from "@/theme";
-
-export default function SidebarLayout() {
-  return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarPosition: "left",
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderRightColor: colors.border,
-          borderTopWidth: 0,
-          borderRightWidth: 1,
-          width: 240,
-          paddingTop: 24,
-          paddingHorizontal: 12,
-        },
-        tabBarLabelStyle: { fontSize: 14, fontWeight: "600" },
-        tabBarItemStyle: { justifyContent: "flex-start", paddingHorizontal: 12, height: 44 },
-      }}
-    >
-${shellScreens(plan).join("\n")}
-    </Tabs>
-  );
-}
+const styles = StyleSheet.create({
+  frame: { flex: 1, backgroundColor: colors.background },
+  row: { flex: 1, flexDirection: "row", backgroundColor: colors.background },
+  content: { flex: 1 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+    minHeight: 72,
+    paddingHorizontal: 32,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  headerCompact: { minHeight: 64, paddingHorizontal: 16 },
+  headerLinks: { flex: 1, flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: 4 },
+  headerEnd: { minWidth: 120, flexDirection: "row", justifyContent: "flex-end" },
+  brand: { flexDirection: "row", alignItems: "center", gap: 10, maxWidth: 280 },
+  mark: { width: 36, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: colors.primary },
+  markText: { fontSize: 16, fontWeight: "700", color: colors.onPrimary },
+  brandName: { flexShrink: 1, fontSize: 18, fontWeight: "700", color: colors.text },
+  link: { minHeight: 40, paddingHorizontal: 14, borderRadius: 999, alignItems: "center", justifyContent: "center" },
+  sideLink: { minHeight: 44, paddingHorizontal: 12, borderRadius: 10, flexDirection: "row", alignItems: "center", gap: 10 },
+  linkSelected: { backgroundColor: colors.primarySoft },
+  linkText: { fontSize: 15, fontWeight: "600", color: colors.textMuted },
+  cta: { minHeight: 40, paddingHorizontal: 18, borderRadius: 999, alignItems: "center", justifyContent: "center", backgroundColor: colors.primary },
+  ctaText: { fontSize: 14, fontWeight: "700", color: colors.onPrimary },
+  menuButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  sidebar: { width: 248, paddingTop: 20, paddingBottom: 20, paddingHorizontal: 12, borderRightWidth: 1, borderRightColor: colors.border, backgroundColor: colors.surface },
+  sideLinks: { flex: 1, gap: 4, marginTop: 20 },
+  backdrop: { position: "absolute", top: 64, left: 0, right: 0, bottom: 0 },
+  backdropPress: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.overlay },
+  sheet: { gap: 8, padding: 16, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
+});
 `
 }
 
 function shellLayoutFile(plan: AppPlan) {
-  if (plan.navigation === "sidebar") return sidebarLayoutFile(plan)
-  if (plan.navigation === "top-nav") return topNavLayoutFile(plan)
+  if (plan.navigation === "sidebar") return webShellFile(plan, "side")
+  if (plan.navigation === "top-nav") return webShellFile(plan, "top")
   return tabLayoutFile(plan)
 }
 
@@ -781,6 +866,28 @@ export function sendEmailToMe(subject: string, text: string) {
 }
 `
 
+const SITE_LAYOUT_FILE = `import { useWindowDimensions } from "react-native";
+
+/** Width where a website switches from the desktop layout to a stacked phone layout. */
+export const SITE_COMPACT_WIDTH = ${SITE_COMPACT_WIDTH};
+
+/** Sizes for the same page on a phone and on a desktop. */
+export function useSiteLayout() {
+  const { width, height } = useWindowDimensions();
+  const compact = width < SITE_COMPACT_WIDTH;
+  return {
+    width,
+    height,
+    compact,
+    pagePadding: compact ? 20 : 64,
+    sectionGap: compact ? 56 : 104,
+    heroSize: compact ? 40 : 72,
+    titleSize: compact ? 32 : 48,
+    columns: compact ? 1 : width < 1100 ? 2 : 3,
+  };
+}
+`
+
 const BACKEND_INDEX_FILE = `export { backend } from "./provider";
 export { sendEmailToMe, uploadFile, useAuth, useCollection, useStoredValue } from "./hooks";
 export type * from "./types";
@@ -796,6 +903,7 @@ export function generatedAppFiles(plan: AppPlan | null): PreviewFile[] {
     { path: "theme/themes.ts", code: themesFile(plan.themePackage) },
     { path: "data/schema.ts", code: schemaFile(plan.collections) },
     { path: "data/seed.ts", code: seedFile(plan.collections) },
+    { path: "lib/layout.ts", code: SITE_LAYOUT_FILE },
     { path: "lib/backend/index.ts", code: BACKEND_INDEX_FILE },
     { path: "lib/backend/types.ts", code: BACKEND_TYPES_FILE },
     { path: "lib/backend/config.ts", code: backendConfigFile(plan.backend) },

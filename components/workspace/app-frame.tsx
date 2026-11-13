@@ -32,6 +32,7 @@ export function AppFrame({
   interactive,
   title,
   syncing,
+  fit = "scale",
   reloadSignal = 0,
   edits,
   editMode = false,
@@ -51,6 +52,11 @@ export function AppFrame({
   title: string
   /** True while the agent is working on the screens. The app only polls its backend then. */
   syncing: boolean
+  /**
+   * `scale` paints a fixed design width and shrinks it to fit.
+   * `fill` lays the app out at the container's real width, so a website can reflow.
+   */
+  fit?: "scale" | "fill"
   /** Change this to restart the app. */
   reloadSignal?: number
   /** Edits made by hand, shown on top of the running code. */
@@ -68,7 +74,7 @@ export function AppFrame({
 }) {
   const containerRef = React.useRef<HTMLDivElement>(null)
   const frameRef = React.useRef<HTMLIFrameElement>(null)
-  const [size, setSize] = React.useState<{ scale: number; height: number } | null>(null)
+  const [size, setSize] = React.useState<{ scale: number; width: number; height: number } | null>(null)
   const [ready, setReady] = React.useState(false)
   const frameSource = React.useSyncExternalStore(subscribePreviewFrameSource, getPreviewFrameSource, () => null)
   const frameWidth = previewFrameWidth(project.frame)
@@ -81,14 +87,17 @@ export function AppFrame({
     const container = containerRef.current
     if (!container) return
     const measure = () => {
-      const scale = container.clientWidth / frameWidth
-      if (scale > 0) setSize({ scale, height: container.clientHeight / scale })
+      const width = container.clientWidth
+      const height = container.clientHeight
+      if (width <= 0 || height <= 0) return
+      if (fit === "fill") setSize({ scale: 1, width, height })
+      else setSize({ scale: width / frameWidth, width: frameWidth, height: height / (width / frameWidth) })
     }
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(container)
     return () => observer.disconnect()
-  }, [frameWidth])
+  }, [fit, frameWidth])
 
   const post = React.useCallback((message: HostMessage) => {
     frameRef.current?.contentWindow?.postMessage(message, "*")
@@ -195,7 +204,7 @@ export function AppFrame({
           aria-hidden={receivesPointer ? undefined : true}
           className="absolute top-0 left-0 origin-top-left border-0"
           style={{
-            width: frameWidth,
+            width: size.width,
             height: size.height,
             transform: `scale(${size.scale})`,
             pointerEvents: receivesPointer ? undefined : "none",

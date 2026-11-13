@@ -92,8 +92,21 @@ export const componentImportProblem = (code: string, earlier: string[]) => impor
  * rewriting it. A new screen has to build on the shared components, while an
  * edit leaves alone what the screen is made from.
  */
-export function screenProblems(code: string, collections: string[], components: string[], isNew: boolean, chosenByPerson = "") {
+export function screenProblems(
+  code: string,
+  collections: string[],
+  components: string[],
+  isNew: boolean,
+  chosenByPerson = "",
+  responsive = false
+) {
   const problems: string[] = []
+
+  if (responsive && !code.includes("useSiteLayout")) {
+    problems.push(
+      `This is a website page. Call useSiteLayout() from "@/lib/layout" and use layout.compact so rows stack, type shrinks, and padding drops below 840 points.`
+    )
+  }
 
   // On a cloud backend each collection is a table, so one that wasn't planned has nowhere to save.
   const unplanned = [...code.matchAll(COLLECTION_USE)].map((match) => match[1]).filter((name) => !collections.includes(name))

@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { createRoot } from "react-dom/client"
-import { Pressable, StyleSheet, Text, View } from "react-native-web"
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native-web"
 
 import type { HostMessage, PreviewProject } from "@/lib/preview-protocol"
 
@@ -117,6 +117,13 @@ function App() {
   )
 }
 
+const SITE_COMPACT_WIDTH = 840
+
+function useCompact() {
+  const { width } = useWindowDimensions()
+  return width < SITE_COMPACT_WIDTH
+}
+
 function StackScreen({ entry, depth }: { entry: StackEntry; depth: number }) {
   const focused = depth === 0
   const context = React.useMemo(
@@ -131,6 +138,7 @@ function StackScreen({ entry, depth }: { entry: StackEntry; depth: number }) {
     </ScreenContext.Provider>
   )
   const shell = project.shell
+  const compact = useCompact()
   const onShellRoute = Boolean(findScreen(project.screens, entry.route)?.tab)
   // The screen below stays drawn while the new one slides in over it. The ones
   // further down stay mounted, hidden, so they keep their state and scroll position for going back.
@@ -140,14 +148,14 @@ function StackScreen({ entry, depth }: { entry: StackEntry; depth: number }) {
       style={{ visibility: depth > 1 ? "hidden" : undefined }}
       inert={!focused}
     >
-      {onShellRoute && shell === "sidebar" ? (
+      {onShellRoute && shell === "sidebar" && !compact ? (
         <View style={styles.sidebarScreen}>
           <ShellNav active={entry.route} kind="sidebar" />
           <View style={styles.tabContent}>{content}</View>
         </View>
-      ) : onShellRoute && shell === "top-nav" ? (
+      ) : onShellRoute && (shell === "top-nav" || shell === "sidebar") ? (
         <View style={styles.tabScreen}>
-          <ShellNav active={entry.route} kind="top-nav" />
+          <ShellNav active={entry.route} kind="top-nav" compact={compact} />
           <View style={styles.tabContent}>{content}</View>
         </View>
       ) : onShellRoute ? (
@@ -163,8 +171,8 @@ function StackScreen({ entry, depth }: { entry: StackEntry; depth: number }) {
 }
 
 /** The app's shared shell (`app/(tabs)/_layout.tsx`), which the preview draws itself. */
-function ShellNav({ active, kind }: { active: string; kind: "tabs" | "top-nav" | "sidebar" }) {
-  if (kind === "top-nav") return <TopNav active={active} />
+function ShellNav({ active, kind, compact = false }: { active: string; kind: "tabs" | "top-nav" | "sidebar"; compact?: boolean }) {
+  if (kind === "top-nav") return <TopNav active={active} compact={compact} />
   if (kind === "sidebar") return <SideNav active={active} />
   return (
     <View accessibilityRole="tablist" style={styles.tabBar}>
@@ -217,17 +225,48 @@ function HeaderCta() {
   )
 }
 
-/** Marketing header: wordmark, text links, and a primary button. */
-function TopNav({ active }: { active: string }) {
+/** Marketing header: wordmark, text links, and a primary button. Narrow widths use a menu. */
+function TopNav({ active, compact }: { active: string; compact: boolean }) {
+  const [open, setOpen] = React.useState(false)
+  React.useEffect(() => {
+    setOpen(false)
+  }, [active, compact])
   return (
-    <View accessibilityRole="tablist" style={styles.topNav}>
-      <BrandMark />
-      <View style={styles.topNavLinks}>
-        {navItems().map((screen) => (
-          <NavLink key={screen.route} screen={screen} active={active} kind="top-nav" />
-        ))}
+    <View style={styles.topNavWrap}>
+      <View accessibilityRole="tablist" style={[styles.topNav, compact && styles.topNavCompact]}>
+        <View style={styles.topNavSide}>
+          <BrandMark />
+        </View>
+        {compact ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={open ? "Close menu" : "Open menu"}
+            onPress={() => setOpen((value) => !value)}
+            style={styles.menuButton}
+          >
+            <Ionicons name={open ? "close" : "menu"} size={22} color="var(--color-text)" />
+          </Pressable>
+        ) : (
+          <>
+            <View style={styles.topNavLinks}>
+              {navItems().map((screen) => (
+                <NavLink key={screen.route} screen={screen} active={active} kind="top-nav" />
+              ))}
+            </View>
+            <View style={[styles.topNavSide, styles.topNavSideEnd]}>
+              <HeaderCta />
+            </View>
+          </>
+        )}
       </View>
-      <HeaderCta />
+      {open && (
+        <View style={styles.menuSheet}>
+          {navItems().map((screen) => (
+            <NavLink key={screen.route} screen={screen} active={active} kind="top-nav" />
+          ))}
+          <HeaderCta />
+        </View>
+      )}
     </View>
   )
 }
@@ -380,12 +419,22 @@ const styles = StyleSheet.create({
   },
   tab: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", gap: 2 },
   tabLabel: { fontSize: 11, fontWeight: "500" },
+  topNavWrap: { zIndex: 5, backgroundColor: "var(--color-surface)" },
   topNav: {
     flexDirection: "row",
     alignItems: "center",
     gap: 24,
     minHeight: 72,
     paddingHorizontal: 32,
+    borderBottomWidth: 1,
+    borderBottomColor: "var(--color-border)",
+    backgroundColor: "var(--color-surface)",
+  },
+  topNavCompact: { minHeight: 64, paddingHorizontal: 16, gap: 12 },
+  menuButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  menuSheet: {
+    gap: 8,
+    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: "var(--color-border)",
     backgroundColor: "var(--color-surface)",
@@ -401,7 +450,9 @@ const styles = StyleSheet.create({
   },
   brandInitial: { fontSize: 16, fontWeight: "700", color: "var(--color-on-primary)" },
   brandName: { flexShrink: 1, fontSize: 18, fontWeight: "700", letterSpacing: -0.3, color: "var(--color-text)" },
-  topNavLinks: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 4 },
+  topNavSide: { flex: 1, flexDirection: "row", alignItems: "center" },
+  topNavSideEnd: { justifyContent: "flex-end" },
+  topNavLinks: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 },
   topNavItem: {
     alignItems: "center",
     justifyContent: "center",

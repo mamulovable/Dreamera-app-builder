@@ -90,6 +90,14 @@ export function PreviewPanel({
         {hasApp && (
           <div className="flex items-center gap-1">
             {!isWeb && <ExpoQrPopover plan={plan} screens={screens} />}
+            {isWeb && (
+              <PreviewAction
+                label="Open preview in a new tab"
+                onClick={() => window.open(`/preview/${projectId}`, "_blank", "noopener,noreferrer")}
+              >
+                <ExternalLinkIcon />
+              </PreviewAction>
+            )}
             <PreviewAction label={isWeb ? "Reset site data" : "Reset app data"} onClick={() => resetPreviewStorage(projectId)}>
               <RotateCcwIcon />
             </PreviewAction>
@@ -203,6 +211,7 @@ function AppPreview({
                 project={app}
                 theme={activeTheme(plan?.themePackage)}
                 route="/"
+                fit={isWeb ? "fill" : "scale"}
                 interactive
                 title={`${plan?.appName ?? (isWeb ? "Site" : "App")} preview`}
                 syncing={syncing}
