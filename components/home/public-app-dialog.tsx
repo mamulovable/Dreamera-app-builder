@@ -6,10 +6,11 @@ import { Loader2Icon, RotateCcwIcon, RotateCwIcon, SparklesIcon, TriangleAlertIc
 import { demoStorageId, type useProjectPreview } from "@/hooks/use-project-preview"
 import type { ElementEdits } from "@/lib/preview-protocol"
 import { resetPreviewStorage } from "@/lib/preview-storage"
-import type { ProjectSummary } from "@/lib/projects"
+import { isHtmlWebsite, type ProjectSummary } from "@/lib/projects"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { AppFrame } from "@/components/workspace/app-frame"
+import { HtmlFrame, htmlFiles } from "@/components/workspace/html-frame"
 
 const NO_EDITS: ElementEdits = {}
 
@@ -36,13 +37,15 @@ export function PublicAppDialog({
         <div className="min-h-0 flex-1 bg-linear-to-b from-brand/5 to-white p-4 sm:p-6">
           {/* The phone takes all the room there is, keeping its shape on any screen. */}
           <div className="flex size-full items-center justify-center [container-type:size]">
-            <div className="relative aspect-[9/19] w-[min(100cqw,calc(100cqh*9/19))]">
+            <div className={isHtmlWebsite(project.platform) ? "relative aspect-[16/10] w-[min(100cqw,calc(100cqh*16/10))]" : "relative aspect-[9/19] w-[min(100cqw,calc(100cqh*9/19))]"}>
               <div
                 aria-hidden
                 className="absolute -inset-6 rounded-full bg-linear-to-br from-brand/25 via-brand-accent/20 to-brand/15 blur-3xl"
               />
-              <div className="relative size-full overflow-hidden rounded-[2.75rem] border-[8px] border-neutral-900 bg-white shadow-[0_32px_64px_-24px_rgba(76,29,149,0.45)]">
-                {preview ? (
+              <div className={isHtmlWebsite(project.platform) ? "relative size-full overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-[0_32px_64px_-24px_rgba(76,29,149,0.45)]" : "relative size-full overflow-hidden rounded-[2.75rem] border-[8px] border-neutral-900 bg-white shadow-[0_32px_64px_-24px_rgba(76,29,149,0.45)]"}>
+                {preview && isHtmlWebsite(project.platform) ? (
+                  <HtmlFrame {...htmlFiles(preview.project.files)} title={`${project.name}, running`} reloadSignal={reloadSignal} />
+                ) : preview ? (
                   <AppFrame
                     projectId={demoStorageId(project.id)}
                     project={preview.project}

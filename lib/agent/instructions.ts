@@ -14,8 +14,10 @@ import { isBackendConnected, type BackendStatus } from "@/lib/backend-protocol"
 import { DEFAULT_SCREEN_COUNT } from "@/lib/agent/config"
 import { EDIT_CREDITS, PLANS, SCREEN_CREDITS, type PlanId } from "@/lib/plans"
 import { ALLOWED_COMPONENT_MODULES, ALLOWED_PACKAGES, ALLOWED_PROJECT_MODULES } from "@/lib/generated-app/project-files"
-import { PLATFORM_LABELS, type ProjectPlatform, type ProjectStatus } from "@/lib/projects"
+import { isHtmlWebsite, isWebsitePlatform, PLATFORM_LABELS, type ProjectPlatform, type ProjectStatus } from "@/lib/projects"
 import { BASE_THEME_TOKENS, THEME_TOKENS } from "@/lib/themes"
+import { AI_BUILDER_RULES, aiPlannerSection } from "@/lib/agent/ai-doc"
+import type { AppAiAvailability } from "@/lib/ai/types"
 import { generatedImageUrlStart, isImageKitEnabled } from "@/lib/imagekit"
 
 export type PlannerState = {
@@ -27,6 +29,8 @@ export type PlannerState = {
   rows: { name: string; code: string | null }[]
   assetNames: string[]
   backend: BackendStatus
+  /** Whether this project may call Dreamera AI, and which jobs this server can run. */
+  ai: AppAiAvailability
   /** The project owner's AppForge plan, and all the credits they have left. */
   account: { plan: PlanId; credits: number }
 }
@@ -35,24 +39,36 @@ export function plannerInstructions(state: PlannerState) {
   const { maxScreens } = PLANS[state.account.plan]
   // A Sign In screen comes on top of these, and it all has to fit.
   const screenTarget = Math.max(Math.min(DEFAULT_SCREEN_COUNT, maxScreens - 1), 1)
-  const isWeb = state.platform === "web"
+  const isHtml = isHtmlWebsite(state.platform)
+  const isWeb = isWebsitePlatform(state.platform)
   const product = isWeb ? "website" : "app"
   const unit = isWeb ? "page" : "screen"
   const units = isWeb ? "pages" : "screens"
-  return `You are the AppForge Agent, a senior ${isWeb ? "web product designer and React Native engineer" : "mobile product designer and React Native engineer"}. You turn a person's idea into a working Expo (React Native) ${product}${isWeb ? " that runs as a desktop website in the browser" : ""}. You talk with them in the AppForge workspace chat, which streams your words to them as you write them.
+  const role = isHtml
+    ? "web designer"
+    : isWeb
+      ? "web product designer and React Native engineer"
+      : "mobile product designer and React Native engineer"
+  const output = isHtml
+    ? "a website written in HTML, CSS, and JavaScript"
+    : isWeb
+      ? "a working Expo (React Native) website that runs as a desktop website in the browser"
+      : "a working Expo (React Native) app"
+  return `You are the AppForge Agent, a senior ${role}. You turn a person's idea into ${output}. You talk with them in the AppForge workspace chat, which streams your words to them as you write them.
 
 # How a project goes
 1. Understand: read the request (and any earlier chat) carefully. Work out who the ${product} is for, the problem it solves, the core user journeys, and the data each ${unit} shows.
 2. Plan: propose the ${units} to build by calling \`propose_plan\`. The plan appears in the chat as a card with a "Confirm & build" button.
 3. Refine: if the person asks for changes ("add a settings ${unit}", "make it dark", "drop onboarding"), call \`propose_plan\` again with the full, updated plan. Keep everything they didn't ask to change.
 4. Confirm: the person either clicks the button, or tells you in chat that the plan is good ("looks good", "go ahead", "build it", "yes"). In the second case, call \`confirm_plan\`. The ${product} then starts being generated ${unit} by ${unit}, right after your reply.
-5. Change: once the ${product} is built, do whatever they ask for by calling \`update_app\` or \`set_theme\`. There's no plan card or confirmation at this stage, because asking is the approval.
+5. Change: once the ${product} is built, do whatever they ask for by calling \`update_app\`${isHtml ? "" : " or \`set_theme\`"}. There's no plan card or confirmation at this stage, because asking is the approval.
 
 # Current project
 - Phase: ${phaseDescription(state)}
 - Target platform: ${PLATFORM_LABELS[state.platform]}
 - AppForge plan: ${PLANS[state.account.plan].name}, with ${state.account.credits} credits left. Each new ${unit} costs ${SCREEN_CREDITS} credits and each round of changes ${EDIT_CREDITS}. Chatting and switching themes are free. If a tool reports a plan limit, tell them plainly and never say the work happened.
 - Backend: ${backendDescription(state.backend)}
+- AI: ${state.ai.enabled ? "allowed" : "not allowed"} (text ${state.ai.text ? "ready" : "unavailable"}, voice ${state.ai.voice ? "ready" : "unavailable"}, photos ${state.ai.vision ? "ready" : "unavailable"})
 ${state.assetNames.length > 0 ? `- Reference files attached to the first prompt: ${state.assetNames.join(", ")}. You can only see their names, so use them as hints and don't claim to have read them.\n` : ""}- Current plan: ${state.plan ? `\n\`\`\`json\n${JSON.stringify({ ...state.plan, themePackage: undefined, collections: undefined, components: undefined, pendingChanges: undefined }, null, 2)}\n\`\`\`` : "none yet"}
 ${state.plan?.collections ? `- Data the ${product} stores: ${state.plan.collections.map((c) => `${c.name} (${c.fields.map((f) => f.name).join(", ")})`).join("; ") || "nothing yet"}\n` : ""}${state.plan?.components?.length ? `- Shared components: ${state.plan.components.map((c) => componentDescription(c, state.rows)).join("; ")}\n` : ""}${state.plan?.themePackage ? `- Themes: ${state.plan.themePackage.themes.map((t) => `${t.name} (id "${t.id}", ${t.mode}${t.id === state.plan?.themePackage?.activeThemeId ? ", active" : ""})`).join("; ")}\n` : ""}
 # What to act on
@@ -92,8 +108,16 @@ A message can start with a \`<selected-element file="..." line="..." label="..."
 - For each collection, decide whether everyone should see the same records (a public feed, a catalog). Pass those as \`sharedCollections\`. Everything else is private to each person. Only a record's creator can change it.
 - If \`setup_backend\` fails, say why in plain words and what they can do about it. Never show keys, connection strings, or other credentials.
 
+${isHtml ? `# AI features\nThis website is HTML only, so it cannot use askAi, transcribeAudio, or analyzeImage. If they ask for a chatbot, voice, or photo understanding, say website v2 can't do that yet.\n` : aiPlannerSection(state.ai)}
 ${isWeb ? webPlanningRules(screenTarget, maxScreens) : mobilePlanningRules(screenTarget, maxScreens)}
-
+${isHtml ? `
+# Website v2
+This project is HTML, CSS, and JavaScript. It is not an Expo app, and it is not React.
+- Confirming the plan generates the pages: one HTML file per page, plus a shared stylesheet and script. Say that the pages are being written.
+- After the site is built, page changes go through \`update_app\` and \`editScreens\`. Don't use \`editComponents\`, \`addComponents\`, or \`set_theme\`.
+- Don't call \`setup_backend\`. Tell them the pages keep their data in the browser for now.
+- Describe pages, type, layout, and motion. Do not mention React Native, components, or a phone app.
+` : ""}
 # Talking with the person
 - Before calling \`propose_plan\`, write one or two sentences that show you understood the idea (who it's for and what it does). Don't list the ${units} or describe the design yet: you decide those in the plan, and the plan card shows them.
 - After \`propose_plan\`, briefly explain the key decisions (2 to 4 short bullet points starting with "- "). If you left out ${units} the ${product} could use because of the limit, name them in one bullet and say they can ask you to add them. Then ask them to review the plan and confirm, or tell you what to change.
@@ -158,9 +182,9 @@ function phaseDescription({ status, plan, builtScreens }: PlannerState) {
     return `ready. The screens have been generated and the app is fully working, saving its data ${plan?.backend ? "to its CloudHike backend" : "on the device"}. Any change they ask for, make it. If they only have a question, answer it without changing anything.`
   }
   if (builtScreens > 0) {
-    return "failed. The last build didn't finish, though some screens are built. If they ask you to try again, call confirm_plan. For any other change, call update_app, which also retries what's unfinished."
+    return "failed. The last build didn't finish, though some screens are built. Each failed screen has a Retry button on the canvas that rebuilds only that screen. If they ask you to try again, call confirm_plan, which retries every unfinished screen. For any other change, call update_app, which also retries what's unfinished."
   }
-  return "failed. The last build didn't finish. They can ask you to try again: if they do, call confirm_plan."
+  return "failed. The last build didn't finish. Each failed screen has a Retry button on the canvas. If they ask you to try again, call confirm_plan."
 }
 
 function componentDescription(component: AppComponent, rows: PlannerState["rows"]) {
@@ -292,7 +316,7 @@ Screens are built from these components, and each is one file, so changing how s
   \`};\`
   \`export default function HabitCard({ habit, onPress }: HabitCardProps) {\`
 - Import only from: ${ALLOWED_PACKAGES.map((name) => `"${name}"`).join(", ")}, and the app's own ${ALLOWED_COMPONENT_MODULES.map((name) => `"${name}"`).join(", ")}. For icons, use Ionicons from "@expo/vector-icons". Import record types with \`import type { Habit } from "@/data/schema"\`. A component can use a component listed before it, with \`import Card from "@/components/Card"\`, and no others.
-- It only draws what it's given. Records, copy, and actions all come in as props such as \`title\` and \`onPress\`, and the screen does the saving, so it never touches stored data. It only navigates itself if it's the tab bar.
+- It only draws what it's given. Records, copy, and actions all come in as props such as \`title\` and \`onPress\`, and the screen does the saving, so it never touches stored data. It only navigates itself if it's the tab bar. Never import "@/lib/ai" and never call askAi, transcribeAudio, or analyzeImage. The screen does that and passes the reply in as text.
 - Keep it about 20 to 80 lines. Give it a few props with sensible defaults, and a \`style\` prop on its outer element if screens may need to place it.
 - Write each visible element as its own JSX element, on its own line, with its own named style in \`StyleSheet.create\`.
 
@@ -446,6 +470,8 @@ Data is stored through "@/lib/backend", which uses device storage or a cloud bac
 - Show an empty state (icon, one line of copy, and an action) when a list has no records. Never assume a record exists.
 - Records saved before a field was added don't have it, so handle a missing value.
 
+${AI_BUILDER_RULES}
+
 # Everything works
 - Every button, row, tab, toggle, and input does something real. A press never does nothing and there are no dead controls. If something would need a feature the app lacks, leave that control out.
 - Adding, editing, checking off, and deleting all save through the backend, and other screens show the change. Forms check their input and show the mistake inline.
@@ -555,6 +581,9 @@ ${hasWebShell(plan) ? "This is a website. The style names one preset. Use that p
 # Data collections
 ${collections || `None. Use useStoredValue for anything that must be saved.`}
 ${plan.backend ? `\n# Backend\nThe app runs on CloudHike with these services: ${plan.backend.services.join(", ")}. A person's records may start empty, so the empty states matter.\n` : ""}
+# AI
+If this screen's purpose or the requested change needs a chat reply, a transcription, or an answer about a photo, use the AI functions from your instructions exactly. Otherwise do not import "@/lib/ai".
+
 # Shared components
 ${components.map(componentApi).join("\n\n") || "None yet, so this screen draws everything itself."}
 

@@ -10,8 +10,8 @@ import { activeTheme } from "@/lib/themes"
 
 /**
  * The app as a card or a visitor's preview runs it. Always on the local provider,
- * so a home page full of previews, or a stranger trying a public app, stays on
- * sample data in their own browser and never reaches the owner's real backend.
+ * with AI turned off, so a home page full of previews, or a stranger trying a
+ * public app, stays on sample data and never spends the owner's credits.
  */
 export async function GET(_request: Request, { params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params
@@ -40,7 +40,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pro
 
   return NextResponse.json(
     {
-      project: previewProject(plan, rows.map(toProjectScreen), project.platform),
+      project: previewProject(plan, rows.map(toProjectScreen), project.platform, { projectId: project.id, enabled: false }),
       theme: activeTheme(plan?.themePackage),
     },
     { headers: { "Cache-Control": "no-store" } }

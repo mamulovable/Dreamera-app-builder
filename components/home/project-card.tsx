@@ -5,11 +5,12 @@ import { formatDistanceToNowStrict } from "date-fns"
 import { ClockIcon, GlobeIcon, ImageOffIcon, SparklesIcon } from "lucide-react"
 
 import { demoStorageId, type useProjectPreview } from "@/hooks/use-project-preview"
-import { STATUS_STYLES, type ProjectSummary } from "@/lib/projects"
+import { isHtmlWebsite, isWebsitePlatform, STATUS_STYLES, type ProjectSummary } from "@/lib/projects"
 import type { ElementEdits } from "@/lib/preview-protocol"
 import { cn } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AppFrame } from "@/components/workspace/app-frame"
+import { HtmlFrame, htmlFiles } from "@/components/workspace/html-frame"
 
 const NO_EDITS: ElementEdits = {}
 
@@ -71,7 +72,7 @@ export const ProjectCard = React.forwardRef<
           style={project.accentColor ? { backgroundColor: project.accentColor } : undefined}
         />
         <div aria-hidden className="absolute -bottom-12 -left-8 size-32 rounded-full bg-white/60 blur-xl" />
-        {project.platform === "web" ? (
+        {isWebsitePlatform(project.platform) ? (
           <div className="relative mt-10 w-[88%] overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-xl shadow-black/15 ring-1 ring-black/5 transition-transform duration-500 group-hover:-translate-y-2">
             <div className="flex h-6 items-center gap-1 border-b border-neutral-200 bg-neutral-100 px-2">
               <span className="size-1.5 rounded-full bg-red-400" />
@@ -162,6 +163,11 @@ function CardScreen({
   }
   if (!state.preview) return <Skeleton className="size-full rounded-none" />
   if (!running) return <div className="size-full" style={{ background: state.preview.theme?.colors.background }} />
+  if (isHtmlWebsite(project.platform)) {
+    const site = htmlFiles(state.preview.project.files)
+    if (site.pages.length === 0) return <div className="size-full bg-white" />
+    return <HtmlFrame css={site.css} js={site.js} pages={site.pages} interactive={false} title={`${project.name} preview`} />
+  }
   return (
     <AppFrame
       projectId={demoStorageId(project.id)}

@@ -14,11 +14,13 @@ import {
 import { mergePlan, planAppChanges, slugify, type AppChanges } from "@/lib/agent/changes"
 import { configureAgents, DEFAULT_SCREEN_COUNT, PLANNER_MODEL } from "@/lib/agent/config"
 import { plannerInstructions, type PlannerState } from "@/lib/agent/instructions"
+import { aiProvidersConfigured } from "@/lib/ai/providers"
 import type { ProjectRun } from "@/lib/agent/runs"
 import { BACKEND_SERVICES } from "@/lib/backend-protocol"
 import { screenLimitMessage } from "@/lib/billing/credits"
 import { getBackendStatus, setUpBackend } from "@/lib/cloudhike/backend"
 import { buildCost, PLANS } from "@/lib/plans"
+import { isHtmlWebsite } from "@/lib/projects"
 import { HEX_COLOR, themeFromDesign } from "@/lib/themes"
 
 type PlannerContext = PlannerState & {
@@ -217,7 +219,8 @@ const proposePlan = tool<typeof planSchema, PlannerContext>({
     ctx.status = "planning"
     ctx.proposedPlan = plan
     ctx.run.emit({ type: "plan", plan })
-    return `Plan saved. The person now sees it as a card listing all ${plan.screens.length} screens, with a "Confirm & build" button.`
+    const noun = isHtmlWebsite(ctx.platform) ? "pages" : "screens"
+    return `Plan saved. The person now sees it as a card listing all ${plan.screens.length} ${noun}, with a "Confirm & build" button.`
   },
 })
 
@@ -233,7 +236,8 @@ const confirmPlan = tool<z.ZodObject<Record<string, never>>, PlannerContext>({
     const missing = creditsMissing(ctx, ctx.plan)
     if (missing) return `Not started: ${missing}`
     ctx.confirmed = true
-    return "Confirmed. The build starts right after your reply, one screen at a time."
+    const noun = isHtmlWebsite(ctx.platform) ? "page" : "screen"
+    return `Confirmed. The build starts right after your reply, one ${noun} at a time.`
   },
 })
 
@@ -299,6 +303,7 @@ const setupBackend = tool<typeof backendSchema, PlannerContext>({
   parameters: backendSchema,
   async execute({ services, sharedCollections, acceptEmailPolicy }, runContext) {
     const ctx = runContext!.context
+    if (isHtmlWebsite(ctx.platform)) return "Website v2 doesn't connect CloudHike yet. The pages keep their data in the browser."
     if (ctx.status === "building") return "The app is being built right now, and the backend is set up when that finishes."
     if (ctx.builtScreens === 0) return "No screens are built yet. The backend is set up on its own once the build finishes."
     if (!ctx.backend.accountConnected || ctx.backend.state === "disconnected") {
@@ -367,6 +372,7 @@ export async function runPlannerTurn(
   const context: PlannerContext = {
     project,
     backend: await getBackendStatus(project.id, project.userId),
+    ai: { enabled: project.aiEnabled, ...aiProvidersConfigured() },
     projectId: project.id,
     run: projectRun,
     rows,

@@ -4,7 +4,7 @@ import { and, count, eq, sql } from "drizzle-orm"
 
 import { builds, creditTransactions, db, projects, screens, users, type Project } from "@/db"
 import type { AppPlan } from "@/lib/agent-protocol"
-import { EDIT_CREDITS, PLANS, PRO_MONTHLY_CREDITS, buildCost, type CreditReason, type PlanId, type UpgradeReason } from "@/lib/plans"
+import { EDIT_CREDITS, PLANS, PRO_MONTHLY_CREDITS, SCREEN_CREDITS, buildCost, type CreditReason, type PlanId, type UpgradeReason } from "@/lib/plans"
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0]
 
@@ -108,6 +108,20 @@ export async function chargeForBuild(project: Pick<Project, "id" | "userId">, pl
   return { id, credits }
 }
 
+/** Charges for rebuilding one screen that failed and has no code yet. A screen that already has code is free. */
+export async function chargeForScreenRetry(project: Pick<Project, "id" | "userId">, screen: { code: string | null }): Promise<BuildCharge> {
+  const id = randomUUID()
+  const credits = screen.code ? 0 : SCREEN_CREDITS
+  if (credits > 0) {
+    await spendCredits(project.userId, credits, {
+      reason: "build",
+      projectId: project.id,
+      reference: `build:${id}`,
+    })
+  }
+  return { id, credits }
+}
+
 /** Gives back a charge whose build never started. */
 export function refundCharge(project: Pick<Project, "id" | "userId">, charge: BuildCharge) {
   return refundCredits(project.userId, charge.credits, { projectId: project.id, reference: `refund:${charge.id}` })
@@ -119,14 +133,21 @@ export function refundCharge(project: Pick<Project, "id" | "userId">, charge: Bu
  */
 export async function refundUnfinishedBuild(buildId: string) {
   const [build] = await db
-    .select({ charged: builds.creditsCharged, project: projects })
+    .select({ charged: builds.creditsCharged, startedAt: builds.createdAt, project: projects })
     .from(builds)
     .innerJoin(projects, eq(projects.id, builds.projectId))
     .where(eq(builds.id, buildId))
   if (!build?.charged || !build.project.plan) return 0
 
-  const rows = await db.select({ slug: screens.slug, code: screens.code }).from(screens).where(eq(screens.projectId, build.project.id))
-  const amount = Math.min(build.charged, buildCost(build.project.plan, rows))
+  const rows = await db
+    .select({ code: screens.code, status: screens.status, updatedAt: screens.updatedAt })
+    .from(screens)
+    .where(eq(screens.projectId, build.project.id))
+  // Only screens this build queued. A retry of one screen must not refund the others that were already failed.
+  const attempted = rows.filter((row) => row.updatedAt >= build.startedAt)
+  const unfinished = attempted.filter((row) => row.status !== "done" && !row.code).length * SCREEN_CREDITS
+  const edit = build.project.plan.pendingChanges && build.charged % SCREEN_CREDITS === EDIT_CREDITS ? EDIT_CREDITS : 0
+  const amount = Math.min(build.charged, unfinished + edit)
   const refunded = await refundCredits(build.project.userId, amount, { projectId: build.project.id, reference: `refund:${buildId}` })
   return refunded ? amount : 0
 }

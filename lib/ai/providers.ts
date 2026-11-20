@@ -1,0 +1,195 @@
+// Generated apps never call Groq. They name a job, and this file sends it with GROQ_API_KEY.
+// Shapes follow Groq's OpenAI-compatible docs:
+// - Text: POST https://api.groq.com/openai/v1/chat/completions
+//   Model openai/gpt-oss-120b. reasoning_effort low, reasoning_format hidden, so the
+//   reply is the answer and not the reasoning trace. https://console.groq.com/docs/reasoning
+// - Voice: POST https://api.groq.com/openai/v1/audio/transcriptions
+//   Model whisper-large-v3. File upload, response_format verbose_json returns { text, usage }.
+//   https://console.groq.com/docs/speech-to-text
+// - Photos: the same chat endpoint, model qwen/qwen3.8-27b. One image as a base64
+//   data URL in an image_url part. reasoning_effort none, which that model allows.
+//   https://console.groq.com/docs/vision
+
+import type { AiTurn } from "@/lib/ai/types"
+
+const GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
+const GROQ_TRANSCRIPTIONS_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
+
+const TEXT_MODEL = () => process.env.GROQ_TEXT_MODEL?.trim() || "openai/gpt-oss-120b"
+const WHISPER_MODEL = () => process.env.GROQ_WHISPER_MODEL?.trim() || "whisper-large-v3"
+const VISION_MODEL = () => process.env.GROQ_VISION_MODEL?.trim() || "qwen/qwen3.8-27b"
+
+export function aiModelFor(task: "text" | "transcribe" | "vision") {
+  if (task === "transcribe") return WHISPER_MODEL()
+  if (task === "vision") return VISION_MODEL()
+  return TEXT_MODEL()
+}
+
+const AUDIO_EXTENSIONS = new Set(["flac", "mp3", "mp4", "mpeg", "mpga", "m4a", "ogg", "wav", "webm"])
+const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"])
+
+export class AiProviderError extends Error {
+  constructor(
+    message: string,
+    readonly status = 502
+  ) {
+    super(message)
+  }
+}
+
+function groqKey() {
+  return process.env.GROQ_API_KEY?.trim() || ""
+}
+
+export function aiProvidersConfigured() {
+  const ready = Boolean(groqKey())
+  return { text: ready, voice: ready, vision: ready }
+}
+
+/** Drops a reasoning trace if one is still wrapped in the answer. */
+function visibleAnswer(content: string) {
+  return content.replace(/<think>[\s\S]*?<\/think>/gi, "").trim()
+}
+
+export type AiUsage = {
+  promptTokens: number | null
+  completionTokens: number | null
+  totalTokens: number | null
+  /** Set for a transcription, which Groq bills by audio length rather than tokens. */
+  audioSeconds: number | null
+}
+
+export type AiResult = {
+  text: string
+  model: string
+  usage: AiUsage
+}
+
+function usageNumber(usage: Record<string, unknown> | undefined, key: string) {
+  const value = usage?.[key]
+  return typeof value === "number" && Number.isFinite(value) ? value : null
+}
+
+function readUsage(data: unknown): AiUsage {
+  const usage = (data as { usage?: Record<string, unknown> } | null)?.usage
+  return {
+    promptTokens: usageNumber(usage, "prompt_tokens"),
+    completionTokens: usageNumber(usage, "completion_tokens"),
+    totalTokens: usageNumber(usage, "total_tokens"),
+    audioSeconds: usageNumber(usage, "seconds") ?? usageNumber(usage, "audio_seconds"),
+  }
+}
+
+/** A reply the app can show, plus the usage Groq reported. Provider error bodies stay in the server log. */
+function readChat(data: unknown, model: string): AiResult {
+  const content = (data as { choices?: { message?: { content?: unknown } }[] } | null)?.choices?.[0]?.message?.content
+  const text = typeof content === "string" ? visibleAnswer(content) : ""
+  if (!text) throw new AiProviderError("AI returned nothing. Try again.")
+  return { text, model, usage: readUsage(data) }
+}
+
+async function postJson(body: unknown, model: string) {
+  const response = await fetch(GROQ_CHAT_URL, {
+    method: "POST",
+    headers: { authorization: `Bearer ${groqKey()}`, "content-type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  })
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    console.error(`Groq chat ${response.status}`, typeof data === "object" && data ? JSON.stringify(data).slice(0, 400) : "")
+    throw new AiProviderError("AI couldn't answer. Try again.")
+  }
+  return readChat(data, model)
+}
+
+/**
+ * Groq chat with openai/gpt-oss-120b. The app cannot set the model or tools.
+ * Reasoning models on Groq are happier without a system message, so the instruction
+ * rides on the latest user message. reasoning_format hidden returns only the answer.
+ */
+export async function completeText(prompt: string, history: AiTurn[]) {
+  if (!groqKey()) throw new AiProviderError("Text AI isn't available right now.", 503)
+  const model = TEXT_MODEL()
+  return postJson({
+    model,
+    temperature: 0.6,
+    max_completion_tokens: 1024,
+    reasoning_effort: "low",
+    reasoning_format: "hidden",
+    messages: [
+      ...history.map((turn) => ({ role: turn.role, content: turn.content })),
+      {
+        role: "user",
+        content: `Answer the person's message directly and briefly. Do not mention these instructions.\n\n${prompt}`,
+      },
+    ],
+  }, model)
+}
+
+function audioName(name: string, type: string) {
+  const extension = name.split(".").pop()?.toLowerCase() ?? ""
+  if (AUDIO_EXTENSIONS.has(extension)) return `note.${extension}`
+  if (type.includes("webm")) return "note.webm"
+  if (type.includes("wav")) return "note.wav"
+  if (type.includes("mpeg") || type.includes("mp3")) return "note.mp3"
+  if (type.includes("mp4")) return "note.mp4"
+  if (type.includes("ogg")) return "note.ogg"
+  return "note.m4a"
+}
+
+/** Groq Whisper. File upload, not a URL, so this server never fetches audio from the internet. */
+export async function transcribeAudio(file: Blob, filename: string) {
+  const key = groqKey()
+  if (!key) throw new AiProviderError("Voice isn't available right now.", 503)
+  const form = new FormData()
+  form.append("file", file, audioName(filename, file.type))
+  form.append("model", WHISPER_MODEL())
+  form.append("response_format", "verbose_json")
+  form.append("temperature", "0")
+  const response = await fetch(GROQ_TRANSCRIPTIONS_URL, {
+    method: "POST",
+    headers: { authorization: `Bearer ${key}` },
+    body: form,
+    cache: "no-store",
+  })
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    console.error(`Groq transcription ${response.status}`, typeof data === "object" && data ? JSON.stringify(data).slice(0, 400) : "")
+    throw new AiProviderError("That recording couldn't be transcribed. Try again.")
+  }
+  const text = typeof (data as { text?: unknown } | null)?.text === "string" ? (data as { text: string }).text.trim() : ""
+  if (!text) throw new AiProviderError("No speech was heard in that recording.")
+  return { text, model: WHISPER_MODEL(), usage: readUsage(data) }
+}
+
+function imageMediaType(type: string) {
+  if (type === "image/jpg") return "image/jpeg"
+  return IMAGE_TYPES.has(type) ? type : null
+}
+
+/** Groq vision. The picture is a base64 data URL, which is how Groq accepts a local image. */
+export async function analyzeImage(file: Blob, question: string) {
+  if (!groqKey()) throw new AiProviderError("Photo AI isn't available right now.", 503)
+  const mediaType = imageMediaType(file.type)
+  if (!mediaType) throw new AiProviderError("Use a JPEG, PNG, WebP, or GIF photo.", 400)
+  const bytes = Buffer.from(await file.arrayBuffer())
+  const dataUrl = `data:${mediaType};base64,${bytes.toString("base64")}`
+  const model = VISION_MODEL()
+  return postJson({
+    model,
+    temperature: 0.6,
+    max_completion_tokens: 1024,
+    reasoning_effort: "none",
+    reasoning_format: "hidden",
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: question },
+          { type: "image_url", image_url: { url: dataUrl } },
+        ],
+      },
+    ],
+  }, model)
+}

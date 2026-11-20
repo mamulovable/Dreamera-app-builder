@@ -20,7 +20,7 @@ import type { InlineEditor } from "@/hooks/use-inline-editor"
 import type { useProjectAgent } from "@/hooks/use-project-agent"
 import { splitElementMessage, type ChatMessage } from "@/lib/agent-protocol"
 import { ELEMENT_LABELS } from "@/lib/preview-protocol"
-import { MAX_PROMPT_LENGTH } from "@/lib/projects"
+import { isHtmlWebsite, MAX_PROMPT_LENGTH, type ProjectPlatform } from "@/lib/projects"
 import { cn } from "@/lib/utils"
 import {
   AlertDialog,
@@ -51,7 +51,17 @@ export type ChatAsset = {
 // How close to the bottom (px) still counts as "following" the conversation.
 const FOLLOW_THRESHOLD = 120
 
-export function ChatPanel({ agent, assets, editor }: { agent: Agent; assets: ChatAsset[]; editor: InlineEditor }) {
+export function ChatPanel({
+  agent,
+  assets,
+  editor,
+  platform,
+}: {
+  agent: Agent
+  assets: ChatAsset[]
+  editor: InlineEditor
+  platform: ProjectPlatform
+}) {
   const [draft, setDraft] = React.useState("")
   const [newSessionOpen, setNewSessionOpen] = React.useState(false)
   const scrollRef = React.useRef<HTMLDivElement>(null)
@@ -63,6 +73,7 @@ export function ChatPanel({ agent, assets, editor }: { agent: Agent; assets: Cha
   // A new session archives the message that held the plan's card, and the plan can still be waiting for confirmation.
   const waitingPlan = (status === "planning" || status === "failed") && !latestPlanId ? agent.plan : null
   const canRetry = !editor.readOnly && (status === "building" || messages.at(-1)?.role === "user")
+  const htmlSite = isHtmlWebsite(platform)
   const confirmPlan = editor.readOnly
     ? undefined
     : () => {
@@ -82,7 +93,8 @@ export function ChatPanel({ agent, assets, editor }: { agent: Agent; assets: Cha
 
   function planState(message: ChatMessage): PlanCardState {
     if (message.id !== latestPlanId) return "superseded"
-    return status === "planning" || status === "failed" ? "pending" : "confirmed"
+    if (status !== "planning" && status !== "failed") return "confirmed"
+    return "pending"
   }
 
   async function handleSubmit(event?: React.FormEvent) {
@@ -170,6 +182,7 @@ export function ChatPanel({ agent, assets, editor }: { agent: Agent; assets: Cha
                 state="pending"
                 disabled={busy}
                 onConfirm={confirmPlan}
+                unit={htmlSite ? "page" : "screen"}
               />
             </li>
           )}
@@ -193,6 +206,7 @@ export function ChatPanel({ agent, assets, editor }: { agent: Agent; assets: Cha
                       state={planState(message)}
                       disabled={busy}
                       onConfirm={confirmPlan}
+                      unit={htmlSite ? "page" : "screen"}
                     />
                   )}
                 </div>
@@ -304,11 +318,15 @@ export function ChatPanel({ agent, assets, editor }: { agent: Agent; assets: Cha
               disabled={status === "building"}
               placeholder={
                 status === "building"
-                  ? "Building your screens…"
+                  ? htmlSite
+                    ? "Building your pages…"
+                    : "Building your screens…"
                   : attachment
                     ? `Ask for a change to this ${attachmentLabel?.toLowerCase()}…`
                     : agent.plan
-                    ? "Ask for changes… e.g. Add a settings screen"
+                    ? htmlSite
+                      ? "Ask for changes… e.g. Add a contact page"
+                      : "Ask for changes… e.g. Add a settings screen"
                     : "Message the agent…"
               }
               className="field-sizing-content block max-h-40 min-h-12 w-full resize-none bg-transparent px-2 pt-1.5 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/70 disabled:cursor-not-allowed"

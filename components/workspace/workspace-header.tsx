@@ -13,10 +13,11 @@ import {
   RocketIcon,
   Share2Icon,
   SmartphoneIcon,
+  SparklesIcon,
 } from "lucide-react"
 
 import { isBackendConnected, type BackendStatus } from "@/lib/backend-protocol"
-import { PLATFORM_LABELS, STATUS_STYLES, type ProjectPlatform, type ProjectStatus } from "@/lib/projects"
+import { isMobilePlatform, isWebsitePlatform, PLATFORM_LABELS, STATUS_STYLES, type ProjectPlatform, type ProjectStatus } from "@/lib/projects"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -34,8 +35,11 @@ export function WorkspaceHeader({
   platform,
   credits,
   backend,
+  aiEnabled,
+  showAi,
   readOnly,
   onOpenBackend,
+  onOpenAi,
   onShare,
   onDownload,
   onPushToGitHub,
@@ -46,9 +50,13 @@ export function WorkspaceHeader({
   platform: ProjectPlatform
   credits: number
   backend: BackendStatus
+  aiEnabled: boolean
+  /** Website v2 has no AI functions, so the button stays hidden. */
+  showAi: boolean
   /** Someone the project was shared with, who can look and download but not change it. */
   readOnly: boolean
   onOpenBackend: () => void
+  onOpenAi: () => void
   onShare: () => void
   onDownload: () => void
   onPushToGitHub: () => void
@@ -76,7 +84,7 @@ export function WorkspaceHeader({
           {statusStyle.label}
         </span>
         <span className="hidden items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground lg:inline-flex">
-          {platform === "web" ? <GlobeIcon className="size-3" /> : <SmartphoneIcon className="size-3" />}
+          {isWebsitePlatform(platform) ? <GlobeIcon className="size-3" /> : <SmartphoneIcon className="size-3" />}
           {PLATFORM_LABELS[platform]}
         </span>
         {readOnly && (
@@ -97,6 +105,7 @@ export function WorkspaceHeader({
           {credits.toLocaleString()}
         </Link>
 
+        {!readOnly && showAi && <AiButton enabled={aiEnabled} onClick={onOpenAi} />}
         {!readOnly && <BackendButton backend={backend} onClick={onOpenBackend} />}
 
         <DropdownMenu>
@@ -127,7 +136,7 @@ export function WorkspaceHeader({
                 Push to GitHub
               </DropdownMenuItem>
             )}
-            {platform !== "web" && (
+            {isMobilePlatform(platform) && (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="rounded-xl py-2">
@@ -147,6 +156,29 @@ export function WorkspaceHeader({
         )}
       </div>
     </header>
+  )
+}
+
+function AiButton({ enabled, onClick }: { enabled: boolean; onClick: () => void }) {
+  if (enabled) {
+    return (
+      <Button
+        variant="ghost"
+        onClick={onClick}
+        title="AI is on"
+        aria-label="AI is on"
+        className="h-8 rounded-full bg-emerald-500/10 px-3 text-emerald-700 hover:bg-emerald-500/15 hover:text-emerald-700"
+      >
+        <SparklesIcon />
+        <span className="hidden lg:inline">AI on</span>
+      </Button>
+    )
+  }
+  return (
+    <Button variant="ghost" onClick={onClick} aria-label="Allow AI" className="h-8 rounded-full px-3">
+      <SparklesIcon />
+      <span className="hidden sm:inline">Allow AI</span>
+    </Button>
   )
 }
 

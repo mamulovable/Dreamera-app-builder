@@ -24,6 +24,8 @@ import {
   MAX_ASSET_SIZE,
   MAX_ASSETS,
   MAX_PROMPT_LENGTH,
+  isWebsitePlatform,
+  PLATFORM_DESCRIPTIONS,
   PLATFORM_LABELS,
   PROJECT_PLATFORMS,
   type ProjectPlatform,
@@ -434,22 +436,27 @@ export function PromptComposer() {
                       />
                     }
                   >
-                    {platform === "web" ? <GlobeIcon /> : <SmartphoneIcon />}
+                    {isWebsitePlatform(platform) ? <GlobeIcon /> : <SmartphoneIcon />}
                     <span className="hidden sm:inline">{PLATFORM_LABELS[platform]}</span>
                     <ChevronDownIcon className="size-3.5 opacity-60" />
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-44 rounded-2xl">
+                  <DropdownMenuContent className="w-64 rounded-2xl">
                     {PROJECT_PLATFORMS.map((option) => (
                       <DropdownMenuItem
                         key={option}
-                        className="rounded-xl py-2"
+                        className="items-start rounded-xl py-2"
                         onClick={() => setPlatform(option)}
                       >
-                        {option === "web" ? <GlobeIcon className="size-4" /> : <SmartphoneIcon className="size-4" />}
-                        {PLATFORM_LABELS[option]}
-                        {option === platform && (
-                          <CheckIcon className="ml-auto text-brand" />
+                        {isWebsitePlatform(option) ? (
+                          <GlobeIcon className="mt-0.5 size-4" />
+                        ) : (
+                          <SmartphoneIcon className="mt-0.5 size-4" />
                         )}
+                        <span className="flex min-w-0 flex-col">
+                          <span>{PLATFORM_LABELS[option]}</span>
+                          <span className="text-xs font-normal text-muted-foreground">{PLATFORM_DESCRIPTIONS[option]}</span>
+                        </span>
+                        {option === platform && <CheckIcon className="ml-auto text-brand" />}
                       </DropdownMenuItem>
                     ))}
                   </DropdownMenuContent>

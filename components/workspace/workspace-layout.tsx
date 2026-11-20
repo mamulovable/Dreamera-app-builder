@@ -9,6 +9,7 @@ import { useWebPublish } from "@/hooks/use-web-publish"
 import { useAuth } from "@/lib/auth-client"
 import { projectSlug } from "@/lib/generated-app/export-project"
 import { generatedAppFiles, previewProject } from "@/lib/generated-app/project-files"
+import { isHtmlWebsite } from "@/lib/projects"
 import { isRunnable, type AppPlan, type ChatMessage, type ProjectScreen } from "@/lib/agent-protocol"
 import type { BackendConnectResult, BackendStatus } from "@/lib/backend-protocol"
 import type { GitHubConnectResult } from "@/lib/github-protocol"
@@ -19,6 +20,7 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable"
+import { AiDialog } from "@/components/workspace/ai-dialog"
 import { BackendDialog } from "@/components/workspace/backend-dialog"
 import { CanvasPanel } from "@/components/workspace/canvas-panel"
 import { ChatPanel, type ChatAsset } from "@/components/workspace/chat-panel"
@@ -38,6 +40,7 @@ function subscribe(onChange: () => void) {
 }
 
 const SET_UP_BACKEND_MESSAGE = "I connected my CloudHike account. Please set up the backend for this app."
+const AI_ALLOWED_MESSAGE = "I turned on AI for this app. Please add the AI features I asked for, using askAi, transcribeAudio, or analyzeImage."
 
 const MOBILE_VIEWS = [
   { id: "chat", label: "Chat", icon: MessageSquareIcon },
@@ -65,6 +68,7 @@ export function WorkspaceLayout({
     platform: ProjectPlatform
     status: ProjectStatus
     plan: AppPlan | null
+    aiEnabled: boolean
   }
   credits: number
   messages: ChatMessage[]
@@ -95,6 +99,8 @@ export function WorkspaceLayout({
     void refreshAccount()
   }, [agent.busy, agent.status, refreshAccount])
 
+  const [aiEnabled, setAiEnabled] = React.useState(project.aiEnabled)
+  const [aiDialogOpen, setAiDialogOpen] = React.useState(false)
   const [backendDialogOpen, setBackendDialogOpen] = React.useState(backendConnectResult !== null)
   const [connectNotice, setConnectNotice] = React.useState(backendConnectResult)
   const [shareDialogOpen, setShareDialogOpen] = React.useState(false)
@@ -102,6 +108,7 @@ export function WorkspaceLayout({
   const [githubDialogOpen, setGithubDialogOpen] = React.useState(githubConnectResult !== null)
   const [githubNotice, setGithubNotice] = React.useState(githubConnectResult)
   const [publishDialogOpen, setPublishDialogOpen] = React.useState(false)
+  const [retryingScreenId, setRetryingScreenId] = React.useState<string | null>(null)
   const webPublish = useWebPublish(project.id, !readOnly, editor.retrySave)
 
   // Coming back from GitHub shouldn't reopen the dialog on every reload.
@@ -131,8 +138,11 @@ export function WorkspaceLayout({
       platform={project.platform}
       credits={user?.credits ?? credits}
       backend={agent.backend}
+      aiEnabled={aiEnabled}
+      showAi={!isHtmlWebsite(project.platform)}
       readOnly={readOnly}
       onOpenBackend={() => setBackendDialogOpen(true)}
+      onOpenAi={() => setAiDialogOpen(true)}
       onShare={() => setShareDialogOpen(true)}
       onDownload={() => setDownloadDialogOpen(true)}
       onPushToGitHub={() => setGithubDialogOpen(true)}
@@ -174,6 +184,29 @@ export function WorkspaceLayout({
       )}
     </>
   )
+  const ai = { projectId: project.id, enabled: aiEnabled }
+  const aiDialog = (
+    <AiDialog
+      projectId={project.id}
+      open={aiDialogOpen}
+      onOpenChange={setAiDialogOpen}
+      enabled={aiEnabled}
+      credits={user?.credits ?? credits}
+      onChange={async (enabled) => {
+        const response = await fetch(`/api/projects/${project.id}/ai`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ enabled }),
+        }).catch(() => null)
+        if (!response?.ok) return false
+        setAiEnabled(enabled)
+        if (enabled && agent.status !== "building" && !agent.busy && !readOnly) {
+          void send({ action: "message", content: AI_ALLOWED_MESSAGE })
+        }
+        return true
+      }}
+    />
+  )
   const backendDialog = (
     <BackendDialog
       projectId={project.id}
@@ -192,7 +225,7 @@ export function WorkspaceLayout({
       onDisconnect={() => agent.changeBackend("DELETE")}
     />
   )
-  const chat = <ChatPanel agent={agent} assets={assets} editor={editor} />
+  const chat = <ChatPanel agent={agent} assets={assets} editor={editor} platform={project.platform} />
   // Rebuilt only when what the running app sees changes: not for code still streaming in,
   // or for the active theme, which reaches it on its own so switching never reloads the app.
   // Edits made by hand reach it on their own too, so it runs the code from before them.
@@ -204,12 +237,13 @@ export function WorkspaceLayout({
     runningPlan?.navigation ?? null,
     runningPlan?.screens.map((s) => [s.id, s.tab]) ?? null,
     runningScreens.map((s) => [s.slug, s.position, s.status, isRunnable(s) ? s.code : null]),
+    aiEnabled,
   ])
   const app = React.useMemo(
-    () => previewProject(runningPlan, runningScreens, project.platform),
+    () => previewProject(runningPlan, runningScreens, project.platform, ai),
     [runnableKey, project.platform]
   )
-  const appFiles = React.useMemo(() => generatedAppFiles(agent.plan), [agent.plan])
+  const appFiles = React.useMemo(() => generatedAppFiles(agent.plan, ai), [agent.plan, aiEnabled, project.id])
   const syncing = agent.status === "building"
 
   const canvas = (
@@ -223,6 +257,15 @@ export function WorkspaceLayout({
       syncing={syncing}
       onThemeChange={agent.setTheme}
       editor={editor}
+      onRetryScreen={
+        readOnly
+          ? undefined
+          : (screenId) => {
+              setRetryingScreenId(screenId)
+              void agent.send({ action: "retry", screenId }).finally(() => setRetryingScreenId(null))
+            }
+      }
+      retryingScreenId={retryingScreenId}
     />
   )
   const preview = (
@@ -237,6 +280,7 @@ export function WorkspaceLayout({
       edits={editor.edits}
       webPublish={webPublish}
       onOpenPublish={() => setPublishDialogOpen(true)}
+      aiEnabled={aiEnabled}
     />
   )
 
@@ -252,6 +296,7 @@ export function WorkspaceLayout({
     return (
       <>
         {header}
+        {aiDialog}
         {backendDialog}
         {exportDialogs}
         <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
@@ -274,6 +319,7 @@ export function WorkspaceLayout({
   return (
     <>
       {header}
+      {aiDialog}
       {backendDialog}
       {exportDialogs}
       <div className="flex min-h-0 flex-1 flex-col">

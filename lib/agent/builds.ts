@@ -5,6 +5,7 @@ import { buildEvents, builds, db, projects, screens, type Project } from "@/db"
 import { toProjectScreen, type AgentEvent, type AppPlan } from "@/lib/agent-protocol"
 import { prepareScreens, runBuildStep } from "@/lib/agent/builder"
 import { refundCharge, refundUnfinishedBuild, type BuildCharge } from "@/lib/billing/credits"
+import { isHtmlWebsite } from "@/lib/projects"
 import { getJobRun, jobCallbackBase, jobsEndpointUp, startJobRun } from "@/lib/jobs"
 
 export const BUILD_WORKER_PATH = "/api/jobs/build-step"
@@ -161,7 +162,8 @@ export async function startBuild(
   plan: AppPlan,
   firstEvents: AgentEvent[] = [],
   charge?: BuildCharge,
-  origin?: string | null
+  origin?: string | null,
+  onlySlugs?: string[]
 ) {
   // Earlier builds' events are only useful while someone can still be reading them.
   await db.delete(builds).where(and(eq(builds.projectId, project.id), eq(builds.status, "finished")))
@@ -179,8 +181,16 @@ export async function startBuild(
   const log = new BuildLog(build.id, lease)
   for (const event of firstEvents) log.emit(event)
   try {
-    log.emit({ type: "status", label: plan.pendingChanges ? "Preparing your changes…" : `Preparing to build ${plan.screens.length} screens…` })
-    const rows = await prepareScreens(project.id, plan)
+    const retryName = onlySlugs?.length === 1 ? plan.screens.find((screen) => screen.id === onlySlugs[0])?.name : null
+    log.emit({
+      type: "status",
+      label: retryName
+        ? `Retrying ${retryName}…`
+        : plan.pendingChanges
+          ? "Preparing your changes…"
+          : `Preparing to build ${plan.screens.length} ${isHtmlWebsite(project.platform) ? "pages" : "screens"}…`,
+    })
+    const rows = await prepareScreens(project.id, plan, onlySlugs, project.platform)
     await db.update(projects).set({ status: "building" }).where(eq(projects.id, project.id))
     log.emit({ type: "project-status", status: "building" })
     log.emit({ type: "screens", screens: rows.map(toProjectScreen) })

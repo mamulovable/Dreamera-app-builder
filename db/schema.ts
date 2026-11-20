@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -90,6 +91,8 @@ export const projects = pgTable(
     plan: jsonb("plan").$type<AppPlan>(),
     /** Listed on the home page, where anyone can run it on sample data. Only its owner can change this. */
     isPublic: boolean("is_public").default(false).notNull(),
+    /** The owner allowed this app to call Dreamera AI. Provider keys stay on this server. */
+    aiEnabled: boolean("ai_enabled").default(false).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -402,6 +405,42 @@ export const webPublishes = pgTable("web_publishes", {
     .notNull()
     .$onUpdate(() => new Date()),
 });
+
+export const aiCallTask = pgEnum("ai_call_task", ["text", "transcribe", "vision"]);
+export const aiCallStatus = pgEnum("ai_call_status", ["succeeded", "failed", "blocked"]);
+
+/** One AI request from a generated app. Snapshots keep the row readable after the project is deleted. */
+export const aiCalls = pgTable(
+  "ai_calls",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
+    userEmail: text("user_email").notNull(),
+    projectTitle: text("project_title").notNull(),
+    task: aiCallTask("task").notNull(),
+    model: text("model"),
+    status: aiCallStatus("status").notNull(),
+    /** Dreamera credits taken for this call. Zero when it was blocked before a charge. */
+    credits: integer("credits").default(0).notNull(),
+    refunded: boolean("refunded").default(false).notNull(),
+    promptTokens: integer("prompt_tokens"),
+    completionTokens: integer("completion_tokens"),
+    totalTokens: integer("total_tokens"),
+    audioSeconds: doublePrecision("audio_seconds"),
+    inputPreview: text("input_preview"),
+    outputPreview: text("output_preview"),
+    inputBytes: integer("input_bytes"),
+    error: text("error"),
+    durationMs: integer("duration_ms"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("ai_calls_created_at_idx").on(table.createdAt),
+    index("ai_calls_user_id_idx").on(table.userId),
+    index("ai_calls_project_id_idx").on(table.projectId),
+  ]
+);
 
 export const adminAuditAction = pgEnum("admin_audit_action", [
   "grant-credits",

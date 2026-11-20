@@ -106,6 +106,15 @@ export type AppPlan = {
   pendingChanges?: PendingChanges | null
   /** Set once the app runs on its CloudHike backend. Everything in here ships inside the app. */
   backend?: AppBackend | null
+  /** Website v2 only. Set once the HTML pages have been built. */
+  approved?: boolean
+  /** Website v2 only. The shared stylesheet and script every page uses. */
+  site?: { css: string; js: string }
+}
+
+/** Where a Website v2 page lives. The first page is the site entry. */
+export function htmlPagePath(slug: string, position: number) {
+  return position === 0 ? "index.html" : `${slug}.html`
 }
 
 export type ChatMessage = {
@@ -181,6 +190,8 @@ export type AgentRequest =
   | { action: "start" }
   | { action: "message"; content: string; element?: ElementContext }
   | { action: "confirm" }
+  /** Rebuild one screen that failed. Finished screens stay as they are. */
+  | { action: "retry"; screenId: string }
 
 export type AgentEvent =
   /** What the agent is doing right now. `null` clears it. */

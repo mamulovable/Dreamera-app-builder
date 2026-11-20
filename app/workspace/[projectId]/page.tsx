@@ -91,6 +91,7 @@ export default async function WorkspacePage({
           platform: project.platform,
           status: project.status,
           plan: project.plan,
+          aiEnabled: project.aiEnabled,
         }}
         credits={user.credits}
         imageTools={isImageKitEnabled()}

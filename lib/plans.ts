@@ -16,6 +16,15 @@ export const EDIT_CREDITS = 5
 export const IMAGE_CREDITS = 1
 export const SMALL_APP_CREDITS = 4 * SCREEN_CREDITS
 
+/** One text reply from a generated app. */
+export const AI_TEXT_CREDITS = 1
+/** One voice transcription from a generated app. */
+export const AI_VOICE_CREDITS = 1
+/** One photo question from a generated app. */
+export const AI_VISION_CREDITS = 2
+/** How many AI credits one app can spend in a UTC day, so a published app can't empty the account. */
+export const AI_DAILY_CREDIT_CAP = 200
+
 export const PLANS: Record<PlanId, { name: string; maxProjects: number | null; maxScreens: number; nativePublish: boolean }> = {
   free: { name: "Free", maxProjects: 2, maxScreens: 5, nativePublish: false },
   pro: { name: "Pro", maxProjects: null, maxScreens: 10, nativePublish: true },
@@ -32,7 +41,7 @@ export function isUpgradeReason(value: unknown): value is UpgradeReason {
   return UPGRADE_REASONS.includes(value as UpgradeReason)
 }
 
-export const CREDIT_REASONS = ["build", "edit", "image", "refund", "renewal", "plan-ended", "admin"] as const
+export const CREDIT_REASONS = ["build", "edit", "image", "ai", "refund", "renewal", "plan-ended", "admin"] as const
 export type CreditReason = (typeof CREDIT_REASONS)[number]
 
 /**

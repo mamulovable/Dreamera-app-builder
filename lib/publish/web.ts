@@ -138,6 +138,7 @@ async function sendToExpo(project: Project, expoToken: string, easOwner: string)
 
 /** Publishes the project's website, or updates it if it has one. Returns as soon as Expo has the app. */
 export async function startWebPublish(project: Project, userId: number): Promise<WebPublishSummary> {
+  if (project.platform === "web-v2") throw new PublishBlockedError("Website v2 downloads as HTML. Publishing it to a live address isn't connected yet.")
   if (!isPublishAvailable()) throw new PublishBlockedError("Publishing isn't set up on this AppForge server yet.")
 
   const expo = await loadExpoConnection(userId)

@@ -199,6 +199,7 @@ export function AppFrame({
           ref={frameRef}
           title={title}
           sandbox="allow-scripts allow-popups"
+          allow="microphone; camera"
           {...("srcDoc" in frameSource ? { srcDoc: frameSource.srcDoc } : { src: frameSource.src })}
           tabIndex={receivesPointer ? undefined : -1}
           aria-hidden={receivesPointer ? undefined : true}

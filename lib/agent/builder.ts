@@ -1,5 +1,5 @@
 import { Agent, assistant, run, user, type AgentInputItem } from "@openai/agents"
-import { and, asc, eq, ne, sql } from "drizzle-orm"
+import { and, asc, eq, inArray, sql } from "drizzle-orm"
 
 import { db, messages, projects, screens, type Project, type Screen } from "@/db"
 import { componentLabel, screenFilePath, toProjectScreen, type AppPlan, type PendingChanges } from "@/lib/agent-protocol"
@@ -12,7 +12,9 @@ import { BuildLostError, type BuildLog } from "@/lib/agent/builds"
 import { fatalScreenProblem, screenProblems, visibleCode } from "@/lib/agent/validate-screen"
 import { refundUnfinishedBuild } from "@/lib/billing/credits"
 import { isBackendLinked, setUpBackend } from "@/lib/cloudhike/backend"
+import { queueHtmlPages, runHtmlBuildStep } from "@/lib/agent/html-build"
 import { fillGeneratedImages, hasGeneratedImages } from "@/lib/imagekit"
+import { isHtmlWebsite, type ProjectPlatform } from "@/lib/projects"
 
 const builderAgent = new Agent({
   name: "AppForge Screen Builder",
@@ -67,16 +69,19 @@ async function syncScreens(projectId: string, plan: AppPlan) {
 
 /**
  * The screen rows for a new build of `plan`. Finished screens are kept and the
- * rest are queued again. Only a screen waiting for an edit has code here, and it
- * keeps that until the new code is ready.
+ * rest are queued again. `onlySlugs` queues just those screens, so a retry of one
+ * failure leaves the other failures alone. Only a screen waiting for an edit has
+ * code here, and it keeps that until the new code is ready.
  */
-export async function prepareScreens(projectId: string, plan: AppPlan) {
+export async function prepareScreens(projectId: string, plan: AppPlan, onlySlugs?: string[], platform?: ProjectPlatform) {
+  if (platform && isHtmlWebsite(platform)) return queueHtmlPages(projectId, plan, onlySlugs)
   const rows = await syncScreens(projectId, plan)
-  await db
-    .update(screens)
-    .set({ status: "pending" })
-    .where(and(eq(screens.projectId, projectId), ne(screens.status, "done")))
-  return rows.map((row) => (row.status === "done" ? row : { ...row, status: "pending" as const }))
+  const queued = (row: Screen) => row.status !== "done" && (!onlySlugs || onlySlugs.includes(row.slug))
+  const ids = rows.filter(queued).map((row) => row.id)
+  if (ids.length > 0) {
+    await db.update(screens).set({ status: "pending" }).where(and(eq(screens.projectId, projectId), inArray(screens.id, ids)))
+  }
+  return rows.map((row) => (queued(row) ? { ...row, status: "pending" as const } : row))
 }
 
 function listNames(names: string[]) {
@@ -102,6 +107,7 @@ function changesSummary({ added, updated, removed, failed = [] }: PendingChanges
  * can run again after an interruption. Returns whether there's more to do.
  */
 export async function runBuildStep(log: BuildLog, project: Project): Promise<boolean> {
+  if (isHtmlWebsite(project.platform)) return runHtmlBuildStep(log, project)
   configureAgents()
 
   const plan = project.plan
@@ -320,8 +326,8 @@ export async function runBuildStep(log: BuildLog, project: Project): Promise<boo
         ? `${changesSummary(changes)}${linked ? backendNote : ""}`
         : `${plan.appName} is ready! I built all ${built.length} screens: ${names(built)}.\n\nTap through the app in the preview, and try other looks from the Theme menu at the top of the canvas.${backendNote}`
       : built.length === 0
-        ? `I couldn't build the screens this time.${refundNote} Say "try again" and I'll have another go.`
-        : `I built ${built.length} of ${rows.length} screens. ${names(failed)} didn't come out right.${refundNote} Say "try again" and I'll retry ${failed.length === 1 ? "it" : "them"}, keeping the finished screens.`
+        ? `I couldn't build the screens this time.${refundNote} Use Retry on a screen in the canvas and I'll try that one again.`
+        : `I built ${built.length} of ${rows.length} screens. ${names(failed)} didn't come out right.${refundNote} Use Retry on ${failed.length === 1 ? "that screen" : "a failed screen"} in the canvas and I'll rebuild it, keeping the finished screens.`
 
   const saved = await db.transaction(async (tx) => {
     // Everything asked for so far is done. This message says what was, so later requests can still refer to it.

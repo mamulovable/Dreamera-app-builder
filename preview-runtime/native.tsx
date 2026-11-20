@@ -359,6 +359,72 @@ export const expoModules: Record<string, Record<string, unknown>> = {
     ],
     Accuracy: { Lowest: 1, Low: 2, Balanced: 3, High: 4, Highest: 5, BestForNavigation: 6 },
   },
+  "expo-audio": {
+    RecordingPresets: { HIGH_QUALITY: { extension: ".webm" }, LOW_QUALITY: { extension: ".webm" } },
+    requestRecordingPermissionsAsync: async () => {
+      if (!navigator.mediaDevices?.getUserMedia) return { granted: false, status: "denied", canAskAgain: false, expires: "never" }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        stream.getTracks().forEach((track) => track.stop())
+        return { granted: true, status: "granted", canAskAgain: true, expires: "never" }
+      } catch {
+        return { granted: false, status: "denied", canAskAgain: false, expires: "never" }
+      }
+    },
+    setAudioModeAsync: async () => {},
+    // Same calls as expo-audio on a device: prepareToRecordAsync, record, stop, then uri.
+    useAudioRecorder() {
+      const mediaRef = React.useRef<MediaRecorder | null>(null)
+      const streamRef = React.useRef<MediaStream | null>(null)
+      const chunksRef = React.useRef<Blob[]>([])
+      const uriRef = React.useRef<string | null>(null)
+      const startingRef = React.useRef<Promise<void> | null>(null)
+      const apiRef = React.useRef<{
+        readonly uri: string | null
+        prepareToRecordAsync: () => Promise<void>
+        record: () => void
+        stop: () => Promise<void>
+      } | null>(null)
+      if (!apiRef.current) {
+        apiRef.current = {
+          get uri() {
+            return uriRef.current
+          },
+          prepareToRecordAsync: async () => {},
+          record() {
+            startingRef.current = (async () => {
+              const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+              streamRef.current = stream
+              const mime = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : ""
+              const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined)
+              chunksRef.current = []
+              recorder.ondataavailable = (event) => {
+                if (event.data.size > 0) chunksRef.current.push(event.data)
+              }
+              recorder.start()
+              mediaRef.current = recorder
+            })()
+          },
+          async stop() {
+            if (startingRef.current) await startingRef.current
+            const recorder = mediaRef.current
+            if (!recorder) return
+            const blob = await new Promise<Blob>((resolve) => {
+              recorder.onstop = () => resolve(new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" }))
+              if (recorder.state !== "inactive") recorder.stop()
+              else resolve(new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" }))
+            })
+            streamRef.current?.getTracks().forEach((track) => track.stop())
+            if (uriRef.current) URL.revokeObjectURL(uriRef.current)
+            uriRef.current = URL.createObjectURL(blob)
+            mediaRef.current = null
+            streamRef.current = null
+          },
+        }
+      }
+      return apiRef.current
+    },
+  },
   "expo-notifications": {
     setNotificationHandler() {},
     requestPermissionsAsync: granted,

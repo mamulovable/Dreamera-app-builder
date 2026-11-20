@@ -18,6 +18,7 @@ import {
 
 import {
   adminAuditLog,
+  aiCalls,
   appBuilds,
   builds,
   cloudhikeConnections,
@@ -212,6 +213,50 @@ export async function getAdminOverview() {
     recentFailed,
     activeBuildRows,
     recentAudit,
+  }
+}
+
+export async function getAdminAiToday() {
+  const since = startOfUtcDay()
+  const [row] = await db
+    .select({
+      calls: count(),
+      credits: sql<number>`coalesce(sum(case when ${aiCalls.refunded} = false and ${aiCalls.status} = 'succeeded' then ${aiCalls.credits} else 0 end), 0)::int`,
+    })
+    .from(aiCalls)
+    .where(gte(aiCalls.createdAt, since))
+  return { calls: row?.calls ?? 0, credits: row?.credits ?? 0 }
+}
+
+export async function getAdminAiCalls() {
+  const since = startOfUtcDay()
+  const [totals, rows] = await Promise.all([
+    db
+      .select({
+        calls: count(),
+        succeeded: sql<number>`count(*) filter (where ${aiCalls.status} = 'succeeded')::int`,
+        failed: sql<number>`count(*) filter (where ${aiCalls.status} = 'failed')::int`,
+        blocked: sql<number>`count(*) filter (where ${aiCalls.status} = 'blocked')::int`,
+        credits: sql<number>`coalesce(sum(case when ${aiCalls.refunded} = false and ${aiCalls.status} = 'succeeded' then ${aiCalls.credits} else 0 end), 0)::int`,
+        promptTokens: sql<number>`coalesce(sum(${aiCalls.promptTokens}), 0)::int`,
+        completionTokens: sql<number>`coalesce(sum(${aiCalls.completionTokens}), 0)::int`,
+      })
+      .from(aiCalls)
+      .where(gte(aiCalls.createdAt, since)),
+    db.select().from(aiCalls).orderBy(desc(aiCalls.createdAt)).limit(100),
+  ])
+  const today = totals[0]
+  return {
+    today: {
+      calls: today?.calls ?? 0,
+      succeeded: today?.succeeded ?? 0,
+      failed: today?.failed ?? 0,
+      blocked: today?.blocked ?? 0,
+      credits: today?.credits ?? 0,
+      promptTokens: today?.promptTokens ?? 0,
+      completionTokens: today?.completionTokens ?? 0,
+    },
+    rows,
   }
 }
 

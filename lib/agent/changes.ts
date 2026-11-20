@@ -4,6 +4,7 @@ import { db, projects, screens, type Screen } from "@/db"
 import {
   COMPONENT_NAME,
   componentLabel,
+  htmlPagePath,
   MAX_TABS,
   MIN_TABS,
   screenFilePath,
@@ -239,7 +240,7 @@ export async function mergePlan(projectId: string, changes: Partial<AppPlan>) {
  * Saves the changes and queues the work: new screens and edited screens wait for
  * the build, and an edited screen keeps its code until its new code is ready.
  */
-export async function applyAppChanges(projectId: string, { plan, removed }: AppChanges) {
+export async function applyAppChanges(projectId: string, { plan, removed }: AppChanges, files: "html" | "expo" = "expo") {
   const edits = plan.pendingChanges?.edits ?? {}
   return db.transaction(async (tx) => {
     const rows = await tx.select().from(screens).where(eq(screens.projectId, projectId)).orderBy(asc(screens.position))
@@ -261,7 +262,7 @@ export async function applyAppChanges(projectId: string, { plan, removed }: AppC
         name: screen.name,
         position,
         layout: screen.layout,
-        filePath: screenFilePath(screen.id, position, screen.tab),
+        filePath: files === "html" ? htmlPagePath(screen.id, position) : screenFilePath(screen.id, position, screen.tab),
       }
       if (!row) {
         await tx.insert(screens).values({ ...values, projectId, slug: screen.id })

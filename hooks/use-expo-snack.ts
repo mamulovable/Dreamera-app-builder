@@ -4,6 +4,7 @@ import * as React from "react"
 import type { Snack, SnackState } from "snack-sdk"
 
 import type { AppPlan, ProjectScreen } from "@/lib/agent-protocol"
+import type { GeneratedAi } from "@/lib/generated-app/project-files"
 import { SNACK_SDK_VERSION, snackProject } from "@/lib/generated-app/snack-project"
 
 /** How long code waits before going to the phone, so several quick edits arrive as one. */
@@ -35,13 +36,13 @@ function readStatus(state: SnackState): ExpoSnackStatus {
  * Keeps the app online as a Snack from this browser tab, once `enabled`. Every change to
  * the code goes straight to the phones connected to it, so it stays online until the tab closes.
  */
-export function useExpoSnack(plan: AppPlan | null, screens: ProjectScreen[], enabled: boolean) {
+export function useExpoSnack(plan: AppPlan | null, screens: ProjectScreen[], enabled: boolean, ai?: GeneratedAi | null) {
   const [status, setStatus] = React.useState<ExpoSnackStatus>({ state: "idle" })
   const [attempt, setAttempt] = React.useState(0)
   const snackRef = React.useRef<Snack | null>(null)
   const sentFiles = React.useRef<string[]>([])
 
-  const project = React.useMemo(() => snackProject(plan, screens), [plan, screens])
+  const project = React.useMemo(() => snackProject(plan, screens, ai), [plan, screens, ai?.projectId, ai?.enabled])
   const hasProject = project !== null
   const latest = React.useRef(project)
   React.useEffect(() => {

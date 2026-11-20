@@ -7,6 +7,7 @@ import {
   GaugeIcon,
   GlobeIcon,
   HammerIcon,
+  SparklesIcon,
   UsersIcon,
 } from "lucide-react"
 
@@ -18,6 +19,7 @@ const NAV = [
   { href: "/admin/users", label: "Users", icon: UsersIcon, exact: false },
   { href: "/admin/projects", label: "Projects", icon: FolderIcon, exact: false },
   { href: "/admin/builds", label: "Builds", icon: HammerIcon, exact: false },
+  { href: "/admin/ai", label: "AI calls", icon: SparklesIcon, exact: false },
   { href: "/admin/public", label: "Public", icon: GlobeIcon, exact: false },
 ] as const
 

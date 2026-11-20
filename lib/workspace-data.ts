@@ -61,5 +61,5 @@ export function buildFileTree(paths: string[]): FileNode[] {
 
 export function languageForPath(path: string) {
   const extension = path.split(".").pop() ?? ""
-  return ({ tsx: "tsx", ts: "typescript", json: "json", js: "javascript" } as Record<string, string>)[extension] ?? "text"
+  return ({ tsx: "tsx", ts: "typescript", json: "json", js: "javascript", html: "html", css: "css" } as Record<string, string>)[extension] ?? "text"
 }

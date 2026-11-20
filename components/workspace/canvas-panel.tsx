@@ -12,6 +12,7 @@ import {
   MousePointer2Icon,
   PencilIcon,
   PlusIcon,
+  RotateCcwIcon,
   Trash2Icon,
 } from "lucide-react"
 
@@ -19,11 +20,12 @@ import type { InlineEditor } from "@/hooks/use-inline-editor"
 import { isRunnable, screenRoute, type AppPlan, type ProjectScreen, type ScreenStatus } from "@/lib/agent-protocol"
 import { previewFrameWidth, type PreviewProject } from "@/lib/preview-protocol"
 import type { ProjectPlatform } from "@/lib/projects"
-import { isMobilePlatform } from "@/lib/projects"
+import { isHtmlWebsite, isMobilePlatform } from "@/lib/projects"
 import { activeTheme, type AppTheme } from "@/lib/themes"
 import { canvasScreenSize, SCREEN_GAP, type CanvasScreen } from "@/lib/workspace-data"
 import { cn } from "@/lib/utils"
 import { AppFrame } from "@/components/workspace/app-frame"
+import { HtmlFrame } from "@/components/workspace/html-frame"
 import { ElementAdvancedPanel, ElementPopover } from "@/components/workspace/element-editor"
 import { ThemeSwitcher } from "@/components/workspace/theme-switcher"
 import { Button } from "@/components/ui/button"
@@ -31,7 +33,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 type View = { x: number; y: number; zoom: number }
-type CanvasItem = CanvasScreen & { status: ScreenStatus | "planned"; route: string; runnable: boolean }
+type CanvasItem = CanvasScreen & { status: ScreenStatus | "planned"; route: string; runnable: boolean; code: string | null }
 type Tool = "select" | "hand"
 type Drag =
   | { kind: "pan"; startX: number; startY: number; origin: View }
@@ -88,15 +90,17 @@ function canvasItems(plan: AppPlan | null, built: ProjectScreen[]): Omit<CanvasI
       status: s.status,
       route: screenRoute(s.slug, s.position),
       runnable: isRunnable(s),
+      code: s.code,
     }))
   }
   return (plan?.screens ?? []).map((s, i) => ({
     id: s.id,
     name: s.name,
     layout: s.layout,
-    status: "planned",
+    status: "planned" as const,
     route: screenRoute(s.id, i),
     runnable: false,
+    code: null,
   }))
 }
 
@@ -110,6 +114,8 @@ export function CanvasPanel({
   syncing,
   onThemeChange,
   editor,
+  onRetryScreen,
+  retryingScreenId,
 }: {
   projectId: string
   platform: ProjectPlatform
@@ -123,6 +129,10 @@ export function CanvasPanel({
   syncing: boolean
   onThemeChange: (themeId: string) => void
   editor: InlineEditor
+  /** Rebuilds one screen that failed. Omitted for someone with view-only access. */
+  onRetryScreen?: (screenId: string) => void
+  /** The screen whose retry was just clicked, until the build takes over. */
+  retryingScreenId?: string | null
 }) {
   const sectionRef = React.useRef<HTMLElement>(null)
   const viewportRef = React.useRef<HTMLDivElement>(null)
@@ -373,6 +383,9 @@ export function CanvasPanel({
               frameRef={screen.id === editor.editingScreenId ? editingFrameRef : undefined}
               onToggleEditing={() => toggleEditing(screen)}
               onEditEscape={handleEscape}
+              onRetry={onRetryScreen}
+              retrying={retryingScreenId === screen.id}
+              html={isHtmlWebsite(platform) ? plan?.site ?? null : null}
             />
           ))}
         </div>
@@ -381,7 +394,7 @@ export function CanvasPanel({
 
         {selected && !drag && !editingScreen && (
           <SelectionToolbar
-            canEdit={selected.runnable && !editor.locked}
+            canEdit={selected.runnable && !editor.locked && !isHtmlWebsite(platform)}
             onEdit={() => toggleEditing(selected)}
             style={{
               left: view.x + (selected.x + card.width / 2) * view.zoom,
@@ -593,6 +606,9 @@ function ScreenFrame({
   frameRef,
   onToggleEditing,
   onEditEscape,
+  onRetry,
+  retrying,
+  html,
 }: {
   screen: CanvasItem
   card: { width: number; height: number }
@@ -612,6 +628,9 @@ function ScreenFrame({
   frameRef?: React.Ref<HTMLDivElement>
   onToggleEditing: () => void
   onEditEscape: () => void
+  onRetry?: (screenId: string) => void
+  retrying: boolean
+  html: { css: string; js: string } | null
 }) {
   return (
     <div
@@ -624,7 +643,7 @@ function ScreenFrame({
         </p>
         <div className="flex shrink-0 items-center gap-1">
           <ScreenStatusChip status={screen.status} />
-          {screen.runnable && (
+          {screen.runnable && !html && (
             <Tooltip>
               <TooltipTrigger
                 render={
@@ -669,7 +688,7 @@ function ScreenFrame({
             <span className="size-2 rounded-full bg-amber-400" />
             <span className="size-2 rounded-full bg-emerald-400" />
             <span className="ml-2 h-3.5 flex-1 rounded-full bg-white px-2 text-[9px] leading-3.5 text-neutral-400">
-              {screen.name.toLowerCase().replace(/\s+/g, "-")}.app
+              {html ? (screen.route === "/" ? "index.html" : `${screen.id}.html`) : `${screen.name.toLowerCase().replace(/\s+/g, "-")}.app`}
             </span>
           </div>
         )}
@@ -682,7 +701,27 @@ function ScreenFrame({
             screen.status === "generating" && "animate-pulse"
           )}
         >
-          {screen.runnable ? (
+          {screen.status === "failed" && onRetry && (
+            <div
+              className="absolute inset-0 z-10 flex cursor-default flex-col items-center justify-center gap-2 bg-white/80 p-4 text-center"
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <p className="text-xs font-medium text-red-700">This screen couldn't be built</p>
+              <Button
+                type="button"
+                size="sm"
+                disabled={retrying || syncing}
+                onClick={() => onRetry(screen.id)}
+                className="h-7 rounded-full bg-brand px-3 text-xs text-white hover:bg-brand-dark"
+              >
+                {retrying ? <Loader2Icon className="size-3.5 animate-spin" /> : <RotateCcwIcon className="size-3.5" />}
+                {retrying ? "Retrying" : "Retry"}
+              </Button>
+            </div>
+          )}
+          {html && screen.runnable && screen.code ? (
+            <HtmlFrame css={html.css} js={html.js} page={screen.code} interactive={false} title={screen.name} />
+          ) : screen.runnable ? (
             <AppFrame
               // A frame opens on its route once, so a screen whose route changed needs a new one.
               key={screen.route}

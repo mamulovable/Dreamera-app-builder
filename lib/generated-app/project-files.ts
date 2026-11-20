@@ -5,8 +5,10 @@
 import type { AppPlan, DataCollection, ProjectScreen } from "@/lib/agent-protocol"
 import { componentFilePath, hasSharedShell, hasTabLayout, hasWebShell, isRunnable, screenRoute } from "@/lib/agent-protocol"
 import type { AppBackend } from "@/lib/backend-protocol"
+import { aiClientSource } from "@/lib/generated-app/ai-client"
 import type { PreviewFile, PreviewProject } from "@/lib/preview-protocol"
 import type { ThemePackage } from "@/lib/themes"
+import { isWebsitePlatform, type ProjectPlatform } from "@/lib/projects"
 
 /** Packages generated screens may import. The preview runtime provides each of them. */
 export const ALLOWED_PACKAGES = [
@@ -25,7 +27,7 @@ export const ALLOWED_PACKAGES = [
 ] as const
 
 /** Project modules generated screens may import. */
-export const ALLOWED_PROJECT_MODULES = ["@/theme", "@/lib/backend", "@/data/schema", "@/lib/layout"] as const
+export const ALLOWED_PROJECT_MODULES = ["@/theme", "@/lib/backend", "@/data/schema", "@/lib/layout", "@/lib/ai"] as const
 
 /** Project modules shared components may import. Screens hand them their data, so they can't reach the backend. */
 export const ALLOWED_COMPONENT_MODULES = ["@/theme", "@/data/schema", "@/lib/layout"] as const
@@ -893,8 +895,23 @@ export { sendEmailToMe, uploadFile, useAuth, useCollection, useStoredValue } fro
 export type * from "./types";
 `
 
+/** Whether this app may call Dreamera AI. Public previews pass enabled: false so they can't spend credits. */
+export type GeneratedAi = { projectId: string; enabled: boolean }
+
+function aiRuntimeConfig(ai: GeneratedAi | null | undefined) {
+  const origin = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "")
+  const enabled = Boolean(ai?.enabled && ai.projectId && origin)
+  return { enabled, apiUrl: enabled && ai ? `${origin}/api/apps/${ai.projectId}/ai` : "" }
+}
+
 /** The shared files for a plan. Plans built before themes existed have none of the themed ones. */
-export function generatedAppFiles(plan: AppPlan | null): PreviewFile[] {
+export function generatedAppFiles(plan: AppPlan | null, ai?: GeneratedAi | null): PreviewFile[] {
+  if (plan?.site?.css && plan.site.js) {
+    return [
+      { path: "styles.css", code: plan.site.css },
+      { path: "site.js", code: plan.site.js },
+    ]
+  }
   if (!plan?.themePackage || !plan.collections) return []
   return [
     { path: "app/_layout.tsx", code: LAYOUT_FILE },
@@ -911,6 +928,7 @@ export function generatedAppFiles(plan: AppPlan | null): PreviewFile[] {
     { path: "lib/backend/hooks.ts", code: BACKEND_HOOKS_FILE },
     { path: "lib/backend/local.ts", code: BACKEND_LOCAL_FILE },
     { path: "lib/backend/cloudhike.ts", code: BACKEND_CLOUDHIKE_FILE },
+    { path: "lib/ai.ts", code: aiClientSource(aiRuntimeConfig(ai)) },
     ...(plan.components ?? []).map((component) => ({ path: componentFilePath(component.name), code: component.code })),
   ]
 }
@@ -919,7 +937,8 @@ export function generatedAppFiles(plan: AppPlan | null): PreviewFile[] {
 export function previewProject(
   plan: AppPlan | null,
   screens: ProjectScreen[],
-  platform?: "web" | "ios" | "android" | "ios-android"
+  platform?: ProjectPlatform,
+  ai?: GeneratedAi | null
 ): PreviewProject {
   const shell =
     plan && hasWebShell(plan)
@@ -930,10 +949,12 @@ export function previewProject(
         ? "tabs"
         : null
   const isWeb =
-    platform === "web" || plan?.navigation === "top-nav" || plan?.navigation === "sidebar"
+    (platform !== undefined && isWebsitePlatform(platform)) ||
+    plan?.navigation === "top-nav" ||
+    plan?.navigation === "sidebar"
   return {
     files: [
-      ...generatedAppFiles(plan),
+      ...generatedAppFiles(plan, ai),
       ...screens.filter(isRunnable).map((s) => ({ path: s.filePath, code: s.code! })),
     ],
     screens: screens.map((s) => ({

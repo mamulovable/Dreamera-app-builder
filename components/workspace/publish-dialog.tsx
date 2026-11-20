@@ -20,7 +20,7 @@ import {
 import type { WebPublishState } from "@/hooks/use-web-publish"
 import { useAuth } from "@/lib/auth-client"
 import { isUpgradeReason, PLANS } from "@/lib/plans"
-import type { ProjectPlatform } from "@/lib/projects"
+import { isHtmlWebsite, isWebsitePlatform, type ProjectPlatform } from "@/lib/projects"
 import {
   FORMAT_PLATFORM,
   VERSION_PATTERN,
@@ -164,17 +164,23 @@ export function PublishDialog({
           </span>
           <div className="min-w-0 space-y-0.5">
             <DialogTitle className="text-base font-semibold tracking-tight">
-              {platform === "web" ? "Publish website" : "Publish"}
+              {isWebsitePlatform(platform) ? "Publish website" : "Publish"}
             </DialogTitle>
             <DialogDescription>
-              {platform === "web"
-                ? "Deploy your website to Expo Hosting. You can close this while it runs."
-                : "Put your app on the web, or build it for the app stores. You can close this while it runs."}
+              {isHtmlWebsite(platform)
+                ? "Website v2 is a folder of HTML, CSS, and JavaScript."
+                : platform === "web"
+                  ? "Deploy your website to Expo Hosting. You can close this while it runs."
+                  : "Put your app on the web, or build it for the app stores. You can close this while it runs."}
             </DialogDescription>
           </div>
         </DialogHeader>
 
-        {loadError ? (
+        {isHtmlWebsite(platform) ? (
+          <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
+            Download the site from the project menu. Publishing it to a live address isn't connected yet.
+          </p>
+        ) : loadError ? (
           <>
             <ErrorDetails summary="Couldn't check your builds">{loadError}</ErrorDetails>
             <Button className="h-10 rounded-full" onClick={() => void load()}>

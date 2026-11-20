@@ -22,6 +22,7 @@ export function PlanCard({
   screens,
   disabled,
   onConfirm,
+  unit = "screen",
 }: {
   plan: AppPlan
   state: PlanCardState
@@ -29,6 +30,8 @@ export function PlanCard({
   screens: ProjectScreen[]
   disabled?: boolean
   onConfirm?: () => void
+  /** What each planned item is called. Website v2 plans pages. */
+  unit?: "screen" | "page"
 }) {
   // Earlier versions start collapsed so the thread stays short.
   const [showScreens, setShowScreens] = React.useState(state !== "superseded")
@@ -37,7 +40,7 @@ export function PlanCard({
 
   return (
     <section
-      aria-label={`App plan: ${plan.appName}`}
+      aria-label={`${unit === "page" ? "Site" : "App"} plan: ${plan.appName}`}
       className={cn(
         "w-full overflow-hidden rounded-2xl border bg-white shadow-[0_12px_32px_-20px_rgba(76,29,149,0.4)]",
         state === "superseded" ? "border-border/60 opacity-70" : "border-brand/25/80"
@@ -47,7 +50,7 @@ export function PlanCard({
         <div className="flex items-center justify-between gap-2">
           <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-brand-dark uppercase">
             <LayoutListIcon className="size-3.5" />
-            App plan
+            {unit === "page" ? "Site plan" : "App plan"}
           </span>
           {state === "superseded" && (
             <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] text-muted-foreground">Earlier version</span>
@@ -87,7 +90,7 @@ export function PlanCard({
           aria-expanded={showScreens}
           className="flex w-full items-center justify-between text-left text-xs font-semibold"
         >
-          {plan.screens.length} screens
+          {plan.screens.length} {unit === "page" ? "pages" : "screens"}
           <ChevronDownIcon className={cn("size-3.5 text-muted-foreground transition-transform", showScreens && "rotate-180")} />
         </button>
 
@@ -121,7 +124,7 @@ export function PlanCard({
               onClick={() => setShowDetails((s) => !s)}
               className="mt-2.5 text-xs font-medium text-brand-dark hover:underline"
             >
-              {showDetails ? "Hide screen details" : "Show screen details"}
+              {showDetails ? `Hide ${unit} details` : `Show ${unit} details`}
             </button>
           </>
         )}
@@ -135,9 +138,11 @@ export function PlanCard({
             className="h-9 w-full rounded-full bg-brand text-white shadow-md shadow-brand/30 hover:opacity-95"
           >
             <HammerIcon />
-            Confirm & build {plan.screens.length} screens
+            {`Confirm & build ${plan.screens.length} ${unit === "page" ? "pages" : "screens"}`}
           </Button>
-          <p className="text-center text-[11px] text-muted-foreground">Uses {buildCost(plan, screens)} credits. Want changes? Tell me in the chat below.</p>
+          <p className="text-center text-[11px] text-muted-foreground">
+            {`Uses ${buildCost(plan, screens)} credits. Want changes? Tell me in the chat below.`}
+          </p>
         </div>
       )}
     </section>

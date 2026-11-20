@@ -3,7 +3,7 @@
 // runs more reliably in Snack. Nothing about the app itself changes.
 
 import type { AppPlan, ProjectScreen, ScreenTab } from "@/lib/agent-protocol"
-import { ALLOWED_PACKAGES, previewProject } from "@/lib/generated-app/project-files"
+import { ALLOWED_PACKAGES, previewProject, type GeneratedAi } from "@/lib/generated-app/project-files"
 
 export const SNACK_SDK_VERSION = "54.0.0"
 
@@ -242,8 +242,8 @@ ${screens}
 }
 
 /** The app as built so far, or null until it has a screen to open. */
-export function snackProject(plan: AppPlan | null, screens: ProjectScreen[]) {
-  const project = previewProject(plan, screens)
+export function snackProject(plan: AppPlan | null, screens: ProjectScreen[], ai?: GeneratedAi | null) {
+  const project = previewProject(plan, screens, undefined, ai)
   const routes = project.screens.filter((s) => s.status === "done").map((s) => ({ route: s.route, path: s.filePath, tab: s.tab }))
   if (routes.length === 0) return null
 
@@ -256,7 +256,8 @@ export function snackProject(plan: AppPlan | null, screens: ProjectScreen[]) {
   for (const file of sources) files[file.path] = { type: "CODE", contents: withRelativeImports(file.path, file.code) }
 
   const used = ALLOWED_PACKAGES.filter((name) => !BUILT_IN.has(name) && sources.some((file) => file.code.includes(`"${name}"`) || file.code.includes(`'${name}'`)))
+  const audio = sources.some((file) => file.code.includes('"expo-audio"')) ? ["expo-audio"] : []
   const tabDependencies = tabRoutes.length > 0 ? ["@react-navigation/bottom-tabs", "@expo/vector-icons"] : []
-  const dependencies = Object.fromEntries([...new Set([...BASE_DEPENDENCIES, ...tabDependencies, ...used])].map((name) => [name, { version: "*" }]))
+  const dependencies = Object.fromEntries([...new Set([...BASE_DEPENDENCIES, ...tabDependencies, ...used, ...audio])].map((name) => [name, { version: "*" }]))
   return { files, dependencies }
 }

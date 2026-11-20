@@ -12,11 +12,21 @@ import { Popover, PopoverContent, PopoverDescription, PopoverTitle, PopoverTrigg
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 
-export function ExpoQrPopover({ plan, screens }: { plan: AppPlan | null; screens: ProjectScreen[] }) {
+export function ExpoQrPopover({
+  plan,
+  screens,
+  projectId,
+  aiEnabled,
+}: {
+  plan: AppPlan | null
+  screens: ProjectScreen[]
+  projectId: string
+  aiEnabled: boolean
+}) {
   const [open, setOpen] = React.useState(false)
   // Starts on first use, then stays online so a connected phone keeps getting changes.
   const [started, setStarted] = React.useState(false)
-  const { status, hasProject, retry } = useExpoSnack(plan, screens, started)
+  const { status, hasProject, retry } = useExpoSnack(plan, screens, started, { projectId, enabled: aiEnabled })
   const connected = status.state === "ready" && status.devices.length > 0
 
   return (

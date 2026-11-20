@@ -345,7 +345,7 @@ function RouteContent({ route }: { route: string }) {
       <Notice
         icon="alert-circle-outline"
         title={`${screen.name} couldn't be built`}
-        body={`Ask the agent to try again and it will retry this screen.`}
+        body="Use Retry on this screen in the canvas. Screens that already built stay as they are."
       />
     )
   }

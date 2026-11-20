@@ -22,13 +22,14 @@ import { useHighlightedCode } from "@/hooks/use-highlighted-code"
 import type { WebPublishState } from "@/hooks/use-web-publish"
 import type { AppPlan, ProjectScreen } from "@/lib/agent-protocol"
 import type { ElementEdits, PreviewFile, PreviewProject } from "@/lib/preview-protocol"
-import type { ProjectPlatform } from "@/lib/projects"
 import { resetPreviewStorage } from "@/lib/preview-storage"
+import { isHtmlWebsite, isMobilePlatform, isWebsitePlatform, type ProjectPlatform } from "@/lib/projects"
 import { WEB_PUBLISH_LABELS, isWebPublishActive } from "@/lib/publish-protocol"
 import { activeTheme } from "@/lib/themes"
 import { buildFileTree, languageForPath, type FileNode } from "@/lib/workspace-data"
 import { cn } from "@/lib/utils"
 import { AppFrame } from "@/components/workspace/app-frame"
+import { HtmlFrame, htmlFiles } from "@/components/workspace/html-frame"
 import { CopyLinkButton, ExpoQrPopover } from "@/components/workspace/expo-qr-popover"
 import { Button } from "@/components/ui/button"
 import {
@@ -54,6 +55,7 @@ export function PreviewPanel({
   edits,
   webPublish,
   onOpenPublish,
+  aiEnabled,
 }: {
   projectId: string
   platform: ProjectPlatform
@@ -69,10 +71,12 @@ export function PreviewPanel({
   edits: ElementEdits
   webPublish: WebPublishState
   onOpenPublish: () => void
+  aiEnabled: boolean
 }) {
   const [reloadSignal, setReloadSignal] = React.useState(0)
   const hasApp = screens.some((s) => s.status === "done")
-  const isWeb = platform === "web"
+  const isWeb = isWebsitePlatform(platform)
+  const html = isHtmlWebsite(platform)
 
   return (
     <Tabs defaultValue="preview" className="@container flex h-full min-h-0 gap-0 bg-white">
@@ -89,8 +93,8 @@ export function PreviewPanel({
         </TabsList>
         {hasApp && (
           <div className="flex items-center gap-1">
-            {!isWeb && <ExpoQrPopover plan={plan} screens={screens} />}
-            {isWeb && (
+            {isMobilePlatform(platform) && <ExpoQrPopover plan={plan} screens={screens} aiEnabled={aiEnabled} projectId={projectId} />}
+            {platform === "web" && (
               <PreviewAction
                 label="Open preview in a new tab"
                 onClick={() => window.open(`/preview/${projectId}`, "_blank", "noopener,noreferrer")}
@@ -113,6 +117,7 @@ export function PreviewPanel({
         <AppPreview
           projectId={projectId}
           isWeb={isWeb}
+          html={html}
           app={hasApp ? app : null}
           plan={plan}
           syncing={syncing}
@@ -153,6 +158,7 @@ function PreviewAction({ label, children, ...props }: React.ComponentProps<typeo
 function AppPreview({
   projectId,
   isWeb,
+  html = false,
   app,
   plan,
   syncing,
@@ -163,6 +169,7 @@ function AppPreview({
 }: {
   projectId: string
   isWeb: boolean
+  html?: boolean
   app: PreviewProject | null
   plan: AppPlan | null
   syncing: boolean
@@ -200,12 +207,23 @@ function AppPreview({
                 <span className="size-2.5 rounded-full bg-amber-400" />
                 <span className="size-2.5 rounded-full bg-emerald-400" />
                 <span className="ml-2 flex h-5 flex-1 items-center rounded-full bg-white px-3 text-[11px] text-neutral-400">
-                  {plan?.appName ? `${plan.appName.toLowerCase().replace(/\s+/g, "")}.expo.app` : "your-site.expo.app"}
+                  {plan?.appName
+                    ? `${plan.appName.toLowerCase().replace(/\s+/g, "")}${html ? ".site" : ".expo.app"}`
+                    : html
+                      ? "your-site.site"
+                      : "your-site.expo.app"}
                 </span>
               </div>
             )}
             <div className={cn("relative", isWeb ? "h-[calc(100%-2.25rem)]" : "h-full")}>
             {app ? (
+              html ? (
+                <HtmlFrame
+                  {...htmlFiles(app.files)}
+                  title={`${plan?.appName ?? "Site"} preview`}
+                  reloadSignal={reloadSignal}
+                />
+              ) : (
               <AppFrame
                 projectId={projectId}
                 project={app}
@@ -218,6 +236,7 @@ function AppPreview({
                 reloadSignal={reloadSignal}
                 edits={edits}
               />
+              )
             ) : (
               <>
                 {!isWeb && <div className="absolute top-2 left-1/2 h-5 w-20 -translate-x-1/2 rounded-full bg-neutral-900" />}

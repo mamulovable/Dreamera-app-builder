@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server"
 import { and, desc, eq } from "drizzle-orm"
 
-import { db, messages, projectAssets, projects, type Project } from "@/db"
+import { db, messages, projectAssets, projects, screens, type Project } from "@/db"
 import { messageWithElement, type AgentEvent, type AgentRequest, type ElementContext } from "@/lib/agent-protocol"
 import { activeBuild, followBuild, startBuild } from "@/lib/agent/builds"
 import { applyAppChanges } from "@/lib/agent/changes"
 import { runPlannerTurn } from "@/lib/agent/planner"
 import { getRun, startRun, type ProjectRun } from "@/lib/agent/runs"
-import { assertCanUseAgent, chargeForBuild, PlanLimitError, planLimitResponse, refundCharge, type BuildCharge } from "@/lib/billing/credits"
-import { MAX_PROMPT_LENGTH } from "@/lib/projects"
+import { assertCanUseAgent, chargeForBuild, chargeForScreenRetry, PlanLimitError, planLimitResponse, refundCharge, type BuildCharge } from "@/lib/billing/credits"
+import { isHtmlWebsite, MAX_PROMPT_LENGTH } from "@/lib/projects"
 import { originFromRequest } from "@/lib/jobs"
 import { getCurrentUser, type SessionUser } from "@/lib/session"
 
@@ -39,7 +39,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
   if (!project) return error("Project not found.", 404)
 
   const body = (await request.json().catch(() => null)) as AgentRequest | null
-  if (!body || !["start", "message", "confirm"].includes(body.action)) return error("Invalid request.", 400)
+  if (!body || !["start", "message", "confirm", "retry"].includes(body.action)) return error("Invalid request.", 400)
   const origin = originFromRequest(request)
 
   const build = await activeBuild(project.id)
@@ -87,10 +87,37 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
       .values({
         projectId: project.id,
         role: "assistant",
-        content: `On it! I'll build the ${plan.screens.length} screens one at a time, starting with ${plan.screens[0].name}.`,
+        content: `On it! I'll build the ${plan.screens.length} ${isHtmlWebsite(project.platform) ? "pages" : "screens"} one at a time, starting with ${plan.screens[0].name}.`,
       })
       .returning({ id: messages.id, role: messages.role, content: messages.content, plan: messages.plan })
     const started = await startBuild(project, plan, [{ type: "message", message: reply }], charge, origin)
+    return streamBuild(started.id, request)
+  }
+
+  if (body.action === "retry") {
+    const screenId = body.screenId?.trim()
+    if (!screenId || !project.plan) return error("That screen isn't waiting for a retry.", 409)
+    const [row] = await db
+      .select()
+      .from(screens)
+      .where(and(eq(screens.projectId, project.id), eq(screens.slug, screenId)))
+    if (!row || row.status !== "failed") return error("That screen isn't waiting for a retry.", 409)
+    let charge: BuildCharge
+    try {
+      charge = await chargeForScreenRetry(project, row)
+    } catch (cause) {
+      if (cause instanceof PlanLimitError) return planLimitResponse(cause)
+      throw cause
+    }
+    const [reply] = await db
+      .insert(messages)
+      .values({
+        projectId: project.id,
+        role: "assistant",
+        content: `Retrying ${row.name}. I'll keep the screens that already built.`,
+      })
+      .returning({ id: messages.id, role: messages.role, content: messages.content, plan: messages.plan })
+    const started = await startBuild(project, project.plan, [{ type: "message", message: reply }], charge, origin, [screenId])
     return streamBuild(started.id, request)
   }
 
@@ -143,7 +170,7 @@ async function respond(run: ProjectRun, project: Project, user: SessionUser, ori
     return
   }
   const nextPlan = changes
-    ? await applyAppChanges(project.id, changes).catch(async (cause) => {
+    ? await applyAppChanges(project.id, changes, isHtmlWebsite(project.platform) ? "html" : "expo").catch(async (cause) => {
         await refundCharge(project, charge)
         throw cause
       })

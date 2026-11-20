@@ -13,11 +13,11 @@ import {
   auditActionLabel,
   formatWhen,
 } from "@/components/admin/admin-ui"
-import { getAdminOverview } from "@/lib/admin"
+import { getAdminAiToday, getAdminOverview } from "@/lib/admin"
 import { PLANS } from "@/lib/plans"
 
 export default async function AdminOverviewPage() {
-  const overview = await getAdminOverview()
+  const [overview, aiToday] = await Promise.all([getAdminOverview(), getAdminAiToday()])
   const attentionCount = overview.activeBuilds + overview.failedProjects + overview.nativeInFlight + overview.cancelingPro
 
   return (
@@ -79,6 +79,12 @@ export default async function AdminOverviewPage() {
             label="Credits spent"
             value={overview.creditsSpentToday}
             hint={`${overview.creditsRefundedToday.toLocaleString()} refunded`}
+          />
+          <StatCard
+            label="AI calls"
+            value={aiToday.calls}
+            hint={`${aiToday.credits.toLocaleString()} Dreamera credits`}
+            href="/admin/ai"
           />
           <StatCard label="Credits granted" value={overview.creditsGrantedToday} hint="Admin adjustments today" href="/admin/users" />
         </StatGrid>

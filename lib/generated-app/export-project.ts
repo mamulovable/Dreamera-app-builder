@@ -4,7 +4,7 @@
 import type { AppPlan, ProjectScreen } from "@/lib/agent-protocol"
 import { isRunnable } from "@/lib/agent-protocol"
 import { publishFiles } from "@/lib/generated-app/build-files"
-import { ALLOWED_PACKAGES, generatedAppFiles } from "@/lib/generated-app/project-files"
+import { ALLOWED_PACKAGES, generatedAppFiles, type GeneratedAi } from "@/lib/generated-app/project-files"
 
 export type ExportedFile = { path: string; content: string }
 
@@ -98,7 +98,12 @@ function packageFile(slug: string, sources: { code: string }[]) {
   const imported = ALLOWED_PACKAGES.filter(
     (name) => ALWAYS_INCLUDED.includes(name) || sources.some(({ code }) => code.includes(`"${name}"`) || code.includes(`'${name}'`))
   )
-  const dependencies = { ...BASE_DEPENDENCIES, ...Object.fromEntries(imported.map((name) => [name, PACKAGE_VERSIONS[name]])) }
+  const dependencies: Record<string, string> = {
+    ...BASE_DEPENDENCIES,
+    ...Object.fromEntries(imported.map((name) => [name, PACKAGE_VERSIONS[name]])),
+  }
+  // Screens never import expo-audio. lib/ai.ts does, and only for voice notes.
+  if (sources.some(({ code }) => code.includes('"expo-audio"'))) dependencies["expo-audio"] = "~1.0.13"
   return `${JSON.stringify(
     {
       name: slug,
@@ -133,7 +138,7 @@ export type PublishIdentity = {
   easOwner: string
 }
 
-function appConfigFile(name: string, slug: string, mode: "light" | "dark" | undefined, publishing?: PublishIdentity | null) {
+function appConfigFile(name: string, slug: string, mode: "light" | "dark" | undefined, publishing?: PublishIdentity | null, microphone = false) {
   const identifier = storeIdentifier(slug)
   return `${JSON.stringify(
     {
@@ -148,7 +153,9 @@ function appConfigFile(name: string, slug: string, mode: "light" | "dark" | unde
         ios: { supportsTablet: true, bundleIdentifier: publishing?.iosBundleIdentifier ?? identifier },
         android: { package: publishing?.androidPackage ?? identifier },
         web: { bundler: "metro", output: "single" },
-        plugins: ["expo-router"],
+        plugins: microphone
+          ? ["expo-router", ["expo-audio", { microphonePermission: "Allow the app to record short voice notes." }]]
+          : ["expo-router"],
       },
     },
     null,
@@ -182,25 +189,47 @@ Then scan the QR code with [Expo Go](https://expo.dev/go) on your phone, or pres
 - \`theme/\`: the app's colors. Change \`activeThemeId\` in \`theme/themes.ts\` to switch theme.
 - \`data/\`: the data types, and the records a new install starts with.
 - \`lib/backend/\`: where data, sign-in, and files are handled. ${backendNote}
+- \`lib/ai.ts\`: text replies, voice notes, and photo questions. The app calls AppForge, which holds the provider keys. It works after AI is allowed for the project.
 `
 }
 
 /** The complete project as built so far. Screens that aren't finished yet are left out. */
+function htmlReadme(name: string) {
+  return `# ${name}
+
+This is a static website: HTML pages, \`styles.css\`, and \`site.js\`. Open \`index.html\` in a browser, or upload the folder to any static host.
+
+There is no install step and no React app in this folder.
+`
+}
+
 export function exportedProjectFiles(
-  project: { title: string; plan: AppPlan | null },
+  project: { id?: string; title: string; plan: AppPlan | null; aiEnabled?: boolean },
   screens: ProjectScreen[],
   publishing?: PublishIdentity | null
 ): ExportedFile[] {
   const name = project.plan?.appName || project.title
+  const site = project.plan?.site
+  if (site?.css && site.js) {
+    const pages = screens.filter(isRunnable)
+    return [
+      { path: "README.md", content: htmlReadme(name) },
+      { path: "styles.css", content: site.css },
+      { path: "site.js", content: site.js },
+      ...pages.map((screen) => ({ path: screen.filePath, content: screen.code! })),
+    ]
+  }
   const slug = projectSlug(name)
+  const ai: GeneratedAi | null = project.id ? { projectId: project.id, enabled: Boolean(project.aiEnabled) } : null
   const sources = [
-    ...generatedAppFiles(project.plan),
+    ...generatedAppFiles(project.plan, ai),
     ...screens.filter(isRunnable).map((screen) => ({ path: screen.filePath, code: screen.code! })),
   ]
+  const microphone = sources.some((file) => file.code.includes('"expo-audio"'))
   return [
     { path: "README.md", content: readmeFile(name, project.plan) },
     { path: "package.json", content: packageFile(slug, sources) },
-    { path: "app.json", content: appConfigFile(name, slug, project.plan?.design.mode, publishing) },
+    { path: "app.json", content: appConfigFile(name, slug, project.plan?.design.mode, publishing, microphone) },
     { path: "tsconfig.json", content: TSCONFIG },
     { path: ".gitignore", content: GITIGNORE },
     ...(publishing ? publishFiles() : []),

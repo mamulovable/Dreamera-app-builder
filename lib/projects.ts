@@ -1,6 +1,6 @@
 // Project rules shared by the composer (client) and the projects API (server).
 
-export const PROJECT_PLATFORMS = ["ios-android", "ios", "android", "web"] as const
+export const PROJECT_PLATFORMS = ["ios-android", "ios", "android", "web", "web-v2"] as const
 export type ProjectPlatform = (typeof PROJECT_PLATFORMS)[number]
 
 export const PLATFORM_LABELS: Record<ProjectPlatform, string> = {
@@ -8,11 +8,31 @@ export const PLATFORM_LABELS: Record<ProjectPlatform, string> = {
   ios: "iOS only",
   android: "Android only",
   web: "Website",
+  "web-v2": "Website v2",
 }
 
-/** Phone-shaped canvas and native store builds. Websites use a browser frame instead. */
+/** One line under the platform name in the prompt, so the two website choices are distinct. */
+export const PLATFORM_DESCRIPTIONS: Record<ProjectPlatform, string> = {
+  "ios-android": "iPhone and Android",
+  ios: "iPhone",
+  android: "Android",
+  web: "Expo, in the browser",
+  "web-v2": "HTML, CSS, and JavaScript",
+}
+
+/** Expo website or the HTML website. Both use a browser frame instead of a phone. */
+export function isWebsitePlatform(platform: ProjectPlatform) {
+  return platform === "web" || platform === "web-v2"
+}
+
+/** The HTML, CSS, and JavaScript website. The Expo website stays on "web". */
+export function isHtmlWebsite(platform: ProjectPlatform) {
+  return platform === "web-v2"
+}
+
+/** Phone-shaped canvas and native store builds. */
 export function isMobilePlatform(platform: ProjectPlatform) {
-  return platform !== "web"
+  return !isWebsitePlatform(platform)
 }
 
 export function isProjectPlatform(value: unknown): value is ProjectPlatform {
