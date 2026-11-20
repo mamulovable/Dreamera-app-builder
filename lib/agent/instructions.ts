@@ -72,7 +72,7 @@ export function plannerInstructions(state: PlannerState) {
 ${state.assetNames.length > 0 ? `- Reference files attached to the first prompt: ${state.assetNames.join(", ")}. You can only see their names, so use them as hints and don't claim to have read them.\n` : ""}- Current plan: ${state.plan ? `\n\`\`\`json\n${JSON.stringify({ ...state.plan, themePackage: undefined, collections: undefined, components: undefined, pendingChanges: undefined }, null, 2)}\n\`\`\`` : "none yet"}
 ${state.plan?.collections ? `- Data the ${product} stores: ${state.plan.collections.map((c) => `${c.name} (${c.fields.map((f) => f.name).join(", ")})`).join("; ") || "nothing yet"}\n` : ""}${state.plan?.components?.length ? `- Shared components: ${state.plan.components.map((c) => componentDescription(c, state.rows)).join("; ")}\n` : ""}${state.plan?.themePackage ? `- Themes: ${state.plan.themePackage.themes.map((t) => `${t.name} (id "${t.id}", ${t.mode}${t.id === state.plan?.themePackage?.activeThemeId ? ", active" : ""})`).join("; ")}\n` : ""}
 # What to act on
-- Do only what the person's latest message asks. Earlier messages are background for understanding it, and what they asked for has already been dealt with, so never do it again or carry it into this change.
+- Do only what the person's latest message asks. Earlier messages are background for understanding it, and what they asked for has already been dealt with, so never do it again or carry it into this change. One exception: if the latest message says they turned AI on, the app was built without it, so that earlier feature still needs wiring. Read the current plan and add the AI. Do not treat it as already done.
 - The current plan is the truth about what the ${product} has. A ${unit} in it already exists, and a ${unit} that isn't in it was removed or never built, whatever earlier messages say.
 - The chat may start partway through the project, or with no earlier messages at all, because finished requests drop out of it and the person can start a new session. Rely on the current plan, and don't mention what you can't see.
 
@@ -316,7 +316,7 @@ Screens are built from these components, and each is one file, so changing how s
   \`};\`
   \`export default function HabitCard({ habit, onPress }: HabitCardProps) {\`
 - Import only from: ${ALLOWED_PACKAGES.map((name) => `"${name}"`).join(", ")}, and the app's own ${ALLOWED_COMPONENT_MODULES.map((name) => `"${name}"`).join(", ")}. For icons, use Ionicons from "@expo/vector-icons". Import record types with \`import type { Habit } from "@/data/schema"\`. A component can use a component listed before it, with \`import Card from "@/components/Card"\`, and no others.
-- It only draws what it's given. Records, copy, and actions all come in as props such as \`title\` and \`onPress\`, and the screen does the saving, so it never touches stored data. It only navigates itself if it's the tab bar. Never import "@/lib/ai" and never call askAi, transcribeAudio, or analyzeImage. The screen does that and passes the reply in as text.
+- It only draws what it's given. Records, copy, and actions all come in as props such as \`title\` and \`onPress\`, and the screen does the saving, so it never touches stored data. It only navigates itself if it's the tab bar. Never import "@/lib/ai" and never call askAi, transcribeAudio, or analyzeImage. The screen does that and passes the reply in as text. That text is plain, not HTML. Draw it in this component's card, with the type scale, padding, and theme colors. Never leave it as an unstyled block.
 - Keep it about 20 to 80 lines. Give it a few props with sensible defaults, and a \`style\` prop on its outer element if screens may need to place it.
 - Write each visible element as its own JSX element, on its own line, with its own named style in \`StyleSheet.create\`.
 
@@ -492,8 +492,9 @@ ${BUILDER_SHARED}
 # Layout
 The screen runs on a phone of 390 x 844 points. Content scrolls, while headers and main action buttons stay in place:
 - The root is \`SafeAreaView\` from "react-native-safe-area-context" with \`style={{ flex: 1, backgroundColor: colors.background }}\`, so the screen always fills the whole frame.
-- Pin headers to the top and a main action button to the bottom, outside the scrolling area, so they're always reachable.
-- Put everything between them in a \`ScrollView\` with \`style={{ flex: 1 }}\`, \`showsVerticalScrollIndicator={false}\`, and \`keyboardShouldPersistTaps="handled"\`. Use \`FlatList\` instead when the whole area is one list, and never put a \`FlatList\` inside a vertical \`ScrollView\`. A form or a modal with many fields scrolls too.
+- Pin a header to the top. Pin one main action button to the bottom, outside the scrolling area, only when it is the single action on the screen.
+- A sign-in or sign-up screen scrolls the whole form, including every button: log in, guest, create account, and any other action. Put those buttons inside the \`ScrollView\`. Never pin one button and leave another below the fold of a view that does not scroll.
+- Put everything else in a \`ScrollView\` with \`style={{ flex: 1 }}\`, \`showsVerticalScrollIndicator={false}\`, and \`keyboardShouldPersistTaps="handled"\`. Use \`FlatList\` instead when the whole area is one list, and never put a \`FlatList\` inside a vertical \`ScrollView\`. A form or a modal with many fields scrolls too.
 - Show every record: don't cut lists down with \`slice\`, so everything people add stays reachable. A preview of a list on a dashboard may show the first few, but only with a "See all" control that opens the full list.
 - Give the scrolling content bottom padding so the last item doesn't sit against the edge. If the content can be short, use \`contentContainerStyle={{ flexGrow: 1 }}\` so the screen still fills the frame, with no empty band.
 - Keep names and labels to one or two lines (\`numberOfLines\`) so rows stay even.
@@ -582,7 +583,7 @@ ${hasWebShell(plan) ? "This is a website. The style names one preset. Use that p
 ${collections || `None. Use useStoredValue for anything that must be saved.`}
 ${plan.backend ? `\n# Backend\nThe app runs on CloudHike with these services: ${plan.backend.services.join(", ")}. A person's records may start empty, so the empty states matter.\n` : ""}
 # AI
-If this screen's purpose or the requested change needs a chat reply, a transcription, or an answer about a photo, use the AI functions from your instructions exactly. Otherwise do not import "@/lib/ai".
+If this screen's purpose or the requested change needs a chat reply, a transcription, or an answer about a photo, use the AI functions from your instructions exactly. Otherwise do not import "@/lib/ai". A reply is plain text. Show it in a card with this screen's type scale, padding, radius, and theme colors, and let the ScrollView scroll a long one. Never render it as HTML or in a WebView.
 
 # Shared components
 ${components.map(componentApi).join("\n\n") || "None yet, so this screen draws everything itself."}

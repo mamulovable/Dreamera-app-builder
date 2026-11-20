@@ -40,7 +40,7 @@ function subscribe(onChange: () => void) {
 }
 
 const SET_UP_BACKEND_MESSAGE = "I connected my CloudHike account. Please set up the backend for this app."
-const AI_ALLOWED_MESSAGE = "I turned on AI for this app. Please add the AI features I asked for, using askAi, transcribeAudio, or analyzeImage."
+const AI_ALLOWED_MESSAGE = "I turned on AI for this app. Please add it to the feature this app already does."
 
 const MOBILE_VIEWS = [
   { id: "chat", label: "Chat", icon: MessageSquareIcon },

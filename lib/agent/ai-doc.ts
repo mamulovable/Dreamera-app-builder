@@ -15,6 +15,7 @@ The app's AI is three functions in "@/lib/ai". They are the whole API. There is 
 - Each function throws an \`Error\` whose \`message\` is safe to show. Wrap the call in try/catch and show \`error.message\` inline. Show a busy state while the promise is running, and ignore a second press until it finishes.
 - Keep a voice note under a minute. Keep a question under a few sentences. \`askAi\` history is at most 12 turns.
 - Use these only when this screen's purpose or the requested change asks for a reply, a transcription, or an answer about a photo. Otherwise do not import "@/lib/ai".
+- The string they return is plain text, not HTML and not markdown. Show it in a card that uses this screen's type scale, padding, radius, and theme colors. Keep line breaks with nested \`Text\` lines, or one \`Text\` whose style sets a line height. Let the screen's \`ScrollView\` scroll a long reply. Never put the string in a \`WebView\`, and never leave it as an unstyled block.
 - Never fetch api.openai.com, api.groq.com, or generativelanguage.googleapis.com. Never write an API key, a model name, or an Authorization header. Never read process.env.
 
 A voice question, written this way and no other way:
@@ -47,7 +48,8 @@ Dreamera AI is one switch for this app. The person clicks Allow AI once. Their c
 - Jobs: ${jobs.join("; ")}.
 - A chat, rewrite, summary, or answer to typed text uses askAi. A recording uses useVoiceNote and then transcribeAudio. An answer about a picture uses analyzeImage. A voice assistant that also replies is transcribeAudio and then askAi. Say which of these the screen should use inside the builder's request, and name the functions. The builder has the exact signatures and must not call a provider itself.
 - If they want one of these and AI is not allowed, do not add that screen and do not call update_app for it. Tell them to click Allow AI, then ask again.
-- If they say they turned AI on, add only the AI feature they already asked for. If they never asked for one, say AI is on and ask what they want it to do. Do not invent a chatbot.
+- If they say they turned AI on, or say "add the AI feature" without naming a new one, read the current plan and wire the job those screens already do. Call \`update_app\` immediately. A summarize, rewrite, chat, or typed-text screen uses askAi. A screen that already records uses useVoiceNote and then transcribeAudio. A screen that already takes a photo uses analyzeImage. Do not ask which of the three they want when the plan already shows the job. Do not add voice or photos they never asked for. Ask what they want only when no screen is a reply, a recording, or a photo question. Do not invent a chatbot.
+- In that builder \`request\`, name the function, the screen that calls it, the text or file it sends, where the reply is saved, and that the reply is plain text shown in an existing card with that screen's type scale. Say it is not HTML and must not go in a WebView.
 - If a job says it is not set up on this server, say that kind of AI isn't available here. Do not write a screen that pretends it works.
 - Website pages that are HTML only cannot use these functions.`
 }
