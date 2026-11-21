@@ -442,11 +442,53 @@ export const aiCalls = pgTable(
   ]
 );
 
+/** One model call while planning or building an app. Token counts come from the provider. */
+export const builderCalls = pgTable(
+  "builder_calls",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
+    userEmail: text("user_email").notNull(),
+    projectTitle: text("project_title").notNull(),
+    /** planner, screen, component, foundation, data, or page. */
+    kind: text("kind").notNull(),
+    label: text("label").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    status: text("status").notNull(),
+    inputTokens: integer("input_tokens").default(0).notNull(),
+    cachedInputTokens: integer("cached_input_tokens").default(0).notNull(),
+    outputTokens: integer("output_tokens").default(0).notNull(),
+    totalTokens: integer("total_tokens").default(0).notNull(),
+    error: text("error"),
+    durationMs: integer("duration_ms"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("builder_calls_created_at_idx").on(table.createdAt),
+    index("builder_calls_project_id_idx").on(table.projectId),
+  ]
+);
+
+/** Which provider plans and builds apps. One row, id "default". Blank models use the env default. */
+export const builderSettings = pgTable("builder_settings", {
+  id: text("id").primaryKey().default("default"),
+  primaryProvider: text("primary_provider").default("cloudhike").notNull(),
+  cloudhikePlannerModel: text("cloudhike_planner_model"),
+  cloudhikeBuilderModel: text("cloudhike_builder_model"),
+  geminiPlannerModel: text("gemini_planner_model"),
+  geminiBuilderModel: text("gemini_builder_model"),
+  updatedBy: integer("updated_by").references(() => users.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const adminAuditAction = pgEnum("admin_audit_action", [
   "grant-credits",
   "set-public",
   "delete-project",
   "fail-build",
+  "set-builder",
 ]);
 
 /** What an operator did in /admin. Tokens and Stripe fields are never written here. */

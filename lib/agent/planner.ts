@@ -12,6 +12,7 @@ import {
   type ChatMessage,
 } from "@/lib/agent-protocol"
 import { mergePlan, planAppChanges, slugify, type AppChanges } from "@/lib/agent/changes"
+import { withBuilderCall } from "@/lib/agent/call-scope"
 import { configureAgents, DEFAULT_SCREEN_COUNT, PLANNER_MODEL } from "@/lib/agent/config"
 import { plannerInstructions, type PlannerState } from "@/lib/agent/instructions"
 import { aiProvidersConfigured } from "@/lib/ai/providers"
@@ -349,7 +350,19 @@ function toInputItems(thread: Pick<ChatMessage, "role" | "content">[]): AgentInp
  * revises the plan, confirms it, or changes the built app. Streams everything
  * to `run`, saves the reply, and says what should happen next.
  */
-export async function runPlannerTurn(
+export function runPlannerTurn(
+  projectRun: ProjectRun,
+  project: Project,
+  assetNames: string[],
+  account: PlannerState["account"]
+) {
+  return withBuilderCall(
+    { projectId: project.id, userId: project.userId, kind: "planner", label: "Planner" },
+    () => planTurn(projectRun, project, assetNames, account)
+  )
+}
+
+async function planTurn(
   projectRun: ProjectRun,
   project: Project,
   assetNames: string[],

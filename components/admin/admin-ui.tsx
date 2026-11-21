@@ -135,6 +135,8 @@ export function auditActionLabel(action: string) {
       return "Delete"
     case "fail-build":
       return "Stop build"
+    case "set-builder":
+      return "Builder"
     default:
       return action
   }

@@ -3,13 +3,13 @@ import { notFound } from "next/navigation"
 
 import { DeleteProjectButton, SetPublicButton } from "@/components/admin/admin-actions"
 import { AdminPageHeader, DataTable, EmptyNote, Panel, StatusBadge, formatWhen } from "@/components/admin/admin-ui"
-import { getAdminProject, PLATFORM_LABELS, STATUS_STYLES } from "@/lib/admin"
+import { getAdminProject, getProjectBuilderTokens, PLATFORM_LABELS, STATUS_STYLES } from "@/lib/admin"
 
 type Props = { params: Promise<{ projectId: string }> }
 
 export default async function AdminProjectDetailPage({ params }: Props) {
   const { projectId } = await params
-  const detail = await getAdminProject(projectId)
+  const [detail, tokens] = await Promise.all([getAdminProject(projectId), getProjectBuilderTokens(projectId)])
   if (!detail) notFound()
 
   const { project, ownerEmail, ownerName, ownerId, screens, shareCount, backend, github, appBuilds, webPublish, activeBuild } =
@@ -54,6 +54,16 @@ export default async function AdminProjectDetailPage({ params }: Props) {
             <div>
               <dt className="text-muted-foreground">Prompt</dt>
               <dd className="mt-1 whitespace-pre-wrap text-pretty">{project.prompt}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Builder tokens</dt>
+              <dd className="font-medium tabular-nums">
+                {tokens.totalTokens.toLocaleString()}
+                <span className="font-normal text-muted-foreground">
+                  {" "}
+                  · {tokens.inputTokens.toLocaleString()} in · {tokens.outputTokens.toLocaleString()} out · {tokens.calls.toLocaleString()} calls
+                </span>
+              </dd>
             </div>
             <div>
               <dt className="text-muted-foreground">Shares</dt>

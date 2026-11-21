@@ -5,7 +5,8 @@ import { db, messages, projects, screens, type Project, type Screen } from "@/db
 import { componentLabel, screenFilePath, toProjectScreen, type AppPlan, type PendingChanges } from "@/lib/agent-protocol"
 import { mergePlan } from "@/lib/agent/changes"
 import { generateComponents, writeComponent } from "@/lib/agent/components"
-import { BUILDER_MODEL, PRIMARY_BUILDER_MODEL, configureAgents } from "@/lib/agent/config"
+import { noteBuilderCall, withBuilderCall } from "@/lib/agent/call-scope"
+import { BUILDER_MODEL, activeBuilderModel, configureAgents } from "@/lib/agent/config"
 import { changeCollections, generateFoundation } from "@/lib/agent/foundation"
 import { BUILDER_INSTRUCTIONS, WEB_BUILDER_INSTRUCTIONS, builderPrompt } from "@/lib/agent/instructions"
 import { BuildLostError, type BuildLog } from "@/lib/agent/builds"
@@ -106,16 +107,24 @@ function changesSummary({ added, updated, removed, failed = [] }: PendingChanges
  * file's code as it's written. Pieces that are already done are kept, so this
  * can run again after an interruption. Returns whether there's more to do.
  */
-export async function runBuildStep(log: BuildLog, project: Project): Promise<boolean> {
+export function runBuildStep(log: BuildLog, project: Project) {
+  return withBuilderCall(
+    { projectId: project.id, userId: project.userId, kind: "build", label: "Build" },
+    () => runBuildStepScoped(log, project)
+  )
+}
+
+async function runBuildStepScoped(log: BuildLog, project: Project): Promise<boolean> {
   if (isHtmlWebsite(project.platform)) return runHtmlBuildStep(log, project)
   configureAgents()
 
   const plan = project.plan
   if (!plan) throw new Error(`Project ${project.id} has no plan to build.`)
-  console.info(`Build ${log.buildId} is calling ${PRIMARY_BUILDER_MODEL}.`)
+  console.info(`Build ${log.buildId} is calling ${await activeBuilderModel()}.`)
 
   if (!plan.themePackage || !plan.collections) {
     log.emit({ type: "status", label: "Designing your themes and sample data…" })
+    noteBuilderCall("foundation", "Theme and data")
     const foundation = await generateFoundation(plan)
     if (hasGeneratedImages(foundation.collections)) log.emit({ type: "status", label: "Generating your app's images…" })
     const next = { ...plan, ...foundation, collections: await fillGeneratedImages(project.id, foundation.collections) }
@@ -128,6 +137,7 @@ export async function runBuildStep(log: BuildLog, project: Project): Promise<boo
   const changes = plan.pendingChanges
   if (changes?.data) {
     log.emit({ type: "status", label: "Updating your app's data…" })
+    noteBuilderCall("data", "Data update")
     const collections = await fillGeneratedImages(project.id, await changeCollections(plan, changes.data))
     await log.flush()
     const next = await mergePlan(project.id, { collections, pendingChanges: { ...changes, data: null } })
@@ -145,6 +155,7 @@ export async function runBuildStep(log: BuildLog, project: Project): Promise<boo
   // Apps built before shared components existed keep their screens as they are.
   if (!plan.components && !rows.some((row) => row.code)) {
     log.emit({ type: "status", label: "Building your reusable components…" })
+    noteBuilderCall("component", "Shared components")
     const components = await fillGeneratedImages(project.id, await generateComponents(plan))
     await log.flush()
     const next = await mergePlan(project.id, { components })
@@ -159,6 +170,7 @@ export async function runBuildStep(log: BuildLog, project: Project): Promise<boo
     const library = plan.components ?? []
     const current = library.find((component) => component.name === name)
     log.emit({ type: "status", label: `Updating ${componentLabel(name)}…` })
+    noteBuilderCall("component", name)
     const code = await fillGeneratedImages(project.id, await writeComponent(plan, { name, purpose }, current?.code ?? null, request))
     await log.flush()
     const { [name]: _done, ...waiting } = changes.components!
@@ -199,6 +211,7 @@ export async function runBuildStep(log: BuildLog, project: Project): Promise<boo
 
     /** Streams one attempt at the file to the client and returns the finished code. */
     const generate = async (input: AgentInputItem[], status: string) => {
+      noteBuilderCall("screen", screen.name)
       const agent = project.platform === "web" ? webBuilderAgent : builderAgent
       const result = await run(agent, input, { stream: true, signal: log.signal })
       let raw = ""

@@ -1,6 +1,7 @@
 import { Agent, assistant, run, user, type AgentInputItem } from "@openai/agents"
 
 import { htmlPagePath, type AppPlan, type PlannedScreen } from "@/lib/agent-protocol"
+import { noteBuilderCall } from "@/lib/agent/call-scope"
 import { BUILDER_MODEL, configureAgents } from "@/lib/agent/config"
 import { visibleCode } from "@/lib/agent/validate-screen"
 import { generatedImageUrlStart, isImageKitEnabled } from "@/lib/imagekit"
@@ -152,10 +153,12 @@ async function writeFile(
 }
 
 export function generateSiteCss(plan: AppPlan, signal: AbortSignal) {
+  noteBuilderCall("page", "Styles")
   return writeFile(cssAgent, `${planBrief(plan)}\n\nWrite styles.css now.`, cssProblems, signal)
 }
 
 export function generateSiteJs(plan: AppPlan, signal: AbortSignal) {
+  noteBuilderCall("page", "Script")
   return writeFile(jsAgent, `${planBrief(plan)}\n\nWrite site.js now.`, jsProblems, signal)
 }
 
@@ -167,6 +170,7 @@ export function generateHtmlPage(
   signal: AbortSignal,
   onDelta: (delta: string) => void
 ) {
+  noteBuilderCall("page", screen.name)
   const file = htmlPagePath(screen.id, position)
   const classes = [...new Set([...(plan.site?.css ?? "").matchAll(/\.([A-Za-z][\w-]*)/g)].map((match) => match[1]))].slice(0, 60)
   const prompt = `${planBrief(plan)}

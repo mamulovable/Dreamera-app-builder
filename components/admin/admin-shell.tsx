@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
+  CpuIcon,
   FolderIcon,
   GaugeIcon,
   GlobeIcon,
@@ -20,6 +21,7 @@ const NAV = [
   { href: "/admin/projects", label: "Projects", icon: FolderIcon, exact: false },
   { href: "/admin/builds", label: "Builds", icon: HammerIcon, exact: false },
   { href: "/admin/ai", label: "AI calls", icon: SparklesIcon, exact: false },
+  { href: "/admin/builder", label: "Builder", icon: CpuIcon, exact: false },
   { href: "/admin/public", label: "Public", icon: GlobeIcon, exact: false },
 ] as const
 

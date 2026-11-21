@@ -21,6 +21,7 @@ import {
   aiCalls,
   appBuilds,
   builds,
+  builderCalls,
   cloudhikeConnections,
   creditTransactions,
   db,
@@ -257,6 +258,110 @@ export async function getAdminAiCalls() {
       completionTokens: today?.completionTokens ?? 0,
     },
     rows,
+  }
+}
+
+const BUILDER_CHART_DAYS = 14
+
+function utcDayKey(date: Date) {
+  return date.toISOString().slice(0, 10)
+}
+
+function utcDayLabel(iso: string) {
+  const [year, month, day] = iso.split("-").map(Number)
+  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  })
+}
+
+export async function getAdminBuilderUsage() {
+  const since = daysAgoUtc(BUILDER_CHART_DAYS - 1)
+  const todayStart = startOfUtcDay()
+  const dayKey = sql<string>`to_char((${builderCalls.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'UTC', 'YYYY-MM-DD')`
+  const [todayRows, dayRows, calls, apps] = await Promise.all([
+    db
+      .select({
+        calls: count(),
+        inputTokens: sql<number>`coalesce(sum(${builderCalls.inputTokens}), 0)::int`,
+        cachedInputTokens: sql<number>`coalesce(sum(${builderCalls.cachedInputTokens}), 0)::int`,
+        outputTokens: sql<number>`coalesce(sum(${builderCalls.outputTokens}), 0)::int`,
+        totalTokens: sql<number>`coalesce(sum(${builderCalls.totalTokens}), 0)::int`,
+      })
+      .from(builderCalls)
+      .where(gte(builderCalls.createdAt, todayStart)),
+    db
+      .select({
+        day: dayKey,
+        inputTokens: sql<number>`coalesce(sum(${builderCalls.inputTokens}), 0)::int`,
+        cachedInputTokens: sql<number>`coalesce(sum(${builderCalls.cachedInputTokens}), 0)::int`,
+        outputTokens: sql<number>`coalesce(sum(${builderCalls.outputTokens}), 0)::int`,
+      })
+      .from(builderCalls)
+      .where(gte(builderCalls.createdAt, since))
+      .groupBy(dayKey),
+    db.select().from(builderCalls).orderBy(desc(builderCalls.createdAt)).limit(80),
+    db
+      .select({
+        projectId: builderCalls.projectId,
+        title: sql<string>`max(${builderCalls.projectTitle})`,
+        userEmail: sql<string>`max(${builderCalls.userEmail})`,
+        calls: count(),
+        inputTokens: sql<number>`coalesce(sum(${builderCalls.inputTokens}), 0)::int`,
+        outputTokens: sql<number>`coalesce(sum(${builderCalls.outputTokens}), 0)::int`,
+        totalTokens: sql<number>`coalesce(sum(${builderCalls.totalTokens}), 0)::int`,
+      })
+      .from(builderCalls)
+      .groupBy(builderCalls.projectId)
+      .orderBy(desc(sql`coalesce(sum(${builderCalls.totalTokens}), 0)`))
+      .limit(12),
+  ])
+  const today = todayRows[0]
+  const byDay = new Map(dayRows.map((row) => [row.day, row]))
+  const days = Array.from({ length: BUILDER_CHART_DAYS }, (_, index) => {
+    const date = daysAgoUtc(BUILDER_CHART_DAYS - 1 - index)
+    const key = utcDayKey(date)
+    const row = byDay.get(key)
+    const input = row?.inputTokens ?? 0
+    const cached = row?.cachedInputTokens ?? 0
+    return {
+      day: key,
+      label: utcDayLabel(key),
+      uncached: Math.max(0, input - cached),
+      cached,
+      output: row?.outputTokens ?? 0,
+    }
+  })
+  return {
+    today: {
+      calls: today?.calls ?? 0,
+      inputTokens: today?.inputTokens ?? 0,
+      cachedInputTokens: today?.cachedInputTokens ?? 0,
+      outputTokens: today?.outputTokens ?? 0,
+      totalTokens: today?.totalTokens ?? 0,
+    },
+    days,
+    calls,
+    apps,
+  }
+}
+
+export async function getProjectBuilderTokens(projectId: string) {
+  const [row] = await db
+    .select({
+      calls: count(),
+      inputTokens: sql<number>`coalesce(sum(${builderCalls.inputTokens}), 0)::int`,
+      outputTokens: sql<number>`coalesce(sum(${builderCalls.outputTokens}), 0)::int`,
+      totalTokens: sql<number>`coalesce(sum(${builderCalls.totalTokens}), 0)::int`,
+    })
+    .from(builderCalls)
+    .where(eq(builderCalls.projectId, projectId))
+  return {
+    calls: row?.calls ?? 0,
+    inputTokens: row?.inputTokens ?? 0,
+    outputTokens: row?.outputTokens ?? 0,
+    totalTokens: row?.totalTokens ?? 0,
   }
 }
 
