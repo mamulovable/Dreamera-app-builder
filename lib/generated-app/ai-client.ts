@@ -5,7 +5,7 @@
 
 export function aiClientSource(config: { enabled: boolean; apiUrl: string }) {
   return `import { useState } from "react";
-import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder } from "expo-audio";
+import { RecordingPresets, createAudioPlayer, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder } from "expo-audio";
 
 const aiConfig = ${JSON.stringify(config)} as { enabled: boolean; apiUrl: string };
 
@@ -48,6 +48,74 @@ export async function askAi(prompt: string, history?: AiTurn[]) {
     body: JSON.stringify({ task: "text", prompt: text, history: history ?? [] }),
   });
   return readAnswer(response);
+}
+
+function speechPieces(text) {
+  const clean = text.replace(/\\s+/g, " ").trim();
+  const pieces = [];
+  let rest = clean;
+  while (rest.length > 180) {
+    let cut = rest.lastIndexOf(" ", 180);
+    if (cut < 40) cut = 180;
+    pieces.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  if (rest) pieces.push(rest);
+  return pieces;
+}
+
+function playClip(uri) {
+  return new Promise(function (resolve, reject) {
+    const player = createAudioPlayer({ uri: uri });
+    let settled = false;
+    const timer = setTimeout(function () {
+      finish();
+    }, 60000);
+    function finish() {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { player.remove(); } catch (e) {}
+      resolve();
+    }
+    try {
+      const subscription = player.addListener("playbackStatusUpdate", function (status) {
+        if (status && status.didJustFinish) {
+          subscription.remove();
+          finish();
+        }
+      });
+      player.play();
+    } catch (error) {
+      clearTimeout(timer);
+      reject(error instanceof Error ? error : new Error("That line couldn't be played."));
+    }
+  });
+}
+
+/**
+ * Speaks text aloud and resolves when playback finishes.
+ * A long passage is spoken as short lines. This does not write a reply.
+ */
+export async function speakText(text) {
+  assertEnabled();
+  const pieces = speechPieces(typeof text === "string" ? text : "");
+  if (pieces.length === 0) throw new Error("Type something to speak.");
+  await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+  for (let i = 0; i < pieces.length; i++) {
+    const response = await fetch(aiConfig.apiUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ task: "speech", text: pieces[i] }),
+    });
+    const data = await response.json().catch(() => null);
+    const message = data && typeof data.message === "string" ? data.message : "";
+    if (!response.ok) throw new Error(message || "That line couldn't be spoken. Try again.");
+    if (!data || typeof data.audio !== "string" || data.audio.indexOf("data:audio/") !== 0) {
+      throw new Error("No speech came back. Try again.");
+    }
+    await playClip(data.audio);
+  }
 }
 
 /** Turns a recording uri from useVoiceNote().stop() into text. */

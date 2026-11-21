@@ -5,7 +5,9 @@ import { SignInDialogProvider } from "@/components/home/sign-in-dialog"
 import { SiteFooter } from "@/components/home/site-footer"
 import { SiteHeader } from "@/components/home/site-header"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { confirmCheckout } from "@/lib/billing/opay"
 import { EDIT_CREDITS, IMAGE_CREDITS, PLANS, PRO_MONTHLY_CREDITS, SCREEN_CREDITS, SMALL_APP_CREDITS } from "@/lib/plans"
+import { getCurrentUser } from "@/lib/session"
 
 export const metadata: Metadata = {
   title: "Pricing — Dreamera",
@@ -38,8 +40,12 @@ const QUESTIONS = [
   },
 ]
 
-export default async function PricingPage({ searchParams }: { searchParams: Promise<{ checkout?: string }> }) {
-  const { checkout } = await searchParams
+export default async function PricingPage({ searchParams }: { searchParams: Promise<{ checkout?: string; reference?: string }> }) {
+  const { checkout, reference } = await searchParams
+  if (checkout === "success" && reference) {
+    const user = await getCurrentUser().catch(() => null)
+    if (user) await confirmCheckout(user.id, reference).catch((cause) => console.error("Confirming an OPay payment failed", cause))
+  }
 
   return (
     <SignInDialogProvider>
@@ -60,7 +66,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Prom
             </p>
           </section>
 
-          <PricingPlans checkout={checkout === "success"} />
+          <PricingPlans checkout={checkout === "success"} reference={checkout === "success" ? (reference ?? null) : null} canceled={checkout === "cancel"} />
 
           <section aria-labelledby="credit-costs" className="mx-auto mt-20 max-w-4xl">
             <h2 id="credit-costs" className="text-center text-2xl font-semibold tracking-tight">

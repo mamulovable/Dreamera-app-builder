@@ -48,8 +48,8 @@ const FEATURES: { label: string; free: string | boolean; pro: string | boolean }
   { label: "App stores", free: false, pro: "Export for iOS and Android" },
 ]
 
-/** `checkout` is how the browser's trip to Stripe went, when it has just come back. */
-export function PricingPlans({ checkout }: { checkout: boolean }) {
+/** `checkout` is set when the browser has just come back from OPay. `reference` is that payment. */
+export function PricingPlans({ checkout, reference, canceled }: { checkout: boolean; reference: string | null; canceled: boolean }) {
   const { user, isPending, refresh } = useAuth()
   const { redirect, pending, error: redirectError } = useBillingRedirect()
   const { openSignIn } = useSignInDialog()
@@ -57,20 +57,43 @@ export function PricingPlans({ checkout }: { checkout: boolean }) {
   const [changing, setChanging] = React.useState(false)
   const [changeError, setChangeError] = React.useState<string | null>(null)
   const [confirmDowngrade, setConfirmDowngrade] = React.useState(false)
+  const [paymentFailed, setPaymentFailed] = React.useState(false)
 
   const isPro = user?.plan === "pro"
 
-  // Stripe tells the server by webhook, which can land a moment after the browser is back.
+  // OPay tells us by callback, which can land a moment after the browser is back.
+  // Asking OPay directly covers the case where the callback has not arrived yet.
   React.useEffect(() => {
     if (!waitingForPayment) return
     if (isPro) return setWaitingForPayment(false)
-    const timer = setInterval(() => void refresh(), 2000)
+    let stopped = false
+    const tick = async () => {
+      if (reference) {
+        const response = await fetch("/api/billing", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "confirm", reference }),
+        }).catch(() => null)
+        const confirmed = await response?.json().catch(() => null)
+        if (confirmed?.status === "failed") {
+          if (!stopped) {
+            setPaymentFailed(true)
+            setWaitingForPayment(false)
+          }
+          return
+        }
+      }
+      if (!stopped) await refresh()
+    }
+    void tick()
+    const timer = setInterval(() => void tick(), 2000)
     const giveUp = setTimeout(() => setWaitingForPayment(false), 30_000)
     return () => {
+      stopped = true
       clearInterval(timer)
       clearTimeout(giveUp)
     }
-  }, [isPro, refresh, waitingForPayment])
+  }, [isPro, reference, refresh, waitingForPayment])
 
   async function change(action: "downgrade" | "keep-pro") {
     setChanging(true)
@@ -104,6 +127,16 @@ export function PricingPlans({ checkout }: { checkout: boolean }) {
       {checkout && !waitingForPayment && !isPro && !isPending && (
         <p role="status" className="mx-auto w-fit rounded-full bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-800">
           Your payment is still being confirmed. This page will show Pro once it's through, so check back in a minute.
+        </p>
+      )}
+      {paymentFailed && (
+        <p role="alert" className="mx-auto w-fit rounded-full bg-destructive/10 px-4 py-2 text-sm text-destructive">
+          The payment didn't go through. You can try the upgrade again.
+        </p>
+      )}
+      {canceled && !checkout && !paymentFailed && (
+        <p role="status" className="mx-auto w-fit rounded-full bg-muted px-4 py-2 text-sm text-muted-foreground">
+          The payment was canceled. You can upgrade whenever you're ready.
         </p>
       )}
       {error && (
@@ -168,14 +201,14 @@ export function PricingPlans({ checkout }: { checkout: boolean }) {
                     Keep Pro
                   </Button>
                 ) : (
-                  <Button className="h-11 w-full rounded-full bg-white text-brand-dark hover:bg-white/90" disabled={pending} onClick={() => void redirect("manage")}>
-                    {pending && <Loader2Icon className="animate-spin" />}
-                    Manage billing
+                  <Button className="h-11 w-full rounded-full bg-white text-brand-dark hover:bg-white/90" disabled={pending} onClick={() => void redirect("upgrade")}>
+                    {pending ? <Loader2Icon className="animate-spin" /> : <SparklesIcon />}
+                    Renew Pro
                   </Button>
                 )}
                 {endsOn && (
                   <p className="text-center text-xs text-white/80">
-                    {user.cancelAtPeriodEnd ? `Pro ends on ${endsOn}` : `Renews on ${endsOn}`}
+                    {user.cancelAtPeriodEnd ? `Pro ends on ${endsOn}` : `Paid through ${endsOn}`}
                   </p>
                 )}
               </div>

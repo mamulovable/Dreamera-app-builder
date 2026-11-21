@@ -20,6 +20,8 @@ export const SMALL_APP_CREDITS = 4 * SCREEN_CREDITS
 export const AI_TEXT_CREDITS = 1
 /** One voice transcription from a generated app. */
 export const AI_VOICE_CREDITS = 1
+/** One spoken line from a generated app. A longer passage is several lines. */
+export const AI_SPEECH_CREDITS = 1
 /** One photo question from a generated app. */
 export const AI_VISION_CREDITS = 2
 /** How many AI credits one app can spend in a UTC day, so a published app can't empty the account. */
@@ -30,7 +32,7 @@ export const PLANS: Record<PlanId, { name: string; maxProjects: number | null; m
   pro: { name: "Pro", maxProjects: null, maxScreens: 10, nativePublish: true },
 }
 
-/** Shown on the pricing page. Keep it the same as the Stripe price in `STRIPE_PRO_PRICE_ID`. */
+/** Shown on the pricing page. Keep it the same as `OPAY_PRO_AMOUNT`. */
 export const PRO_PRICE_LABEL = process.env.NEXT_PUBLIC_PRO_PRICE_LABEL || "$20"
 
 /** A limit the person ran into, which an upgrade prompt explains. API errors carry it as `code`. */

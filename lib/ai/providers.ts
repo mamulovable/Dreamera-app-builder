@@ -3,9 +3,12 @@
 // - Text: POST https://api.groq.com/openai/v1/chat/completions
 //   Model openai/gpt-oss-120b. reasoning_effort low, reasoning_format hidden, so the
 //   reply is the answer and not the reasoning trace. https://console.groq.com/docs/reasoning
-// - Voice: POST https://api.groq.com/openai/v1/audio/transcriptions
+// - Speech to text: POST https://api.groq.com/openai/v1/audio/transcriptions
 //   Model whisper-large-v3. File upload, response_format verbose_json returns { text, usage }.
 //   https://console.groq.com/docs/speech-to-text
+// - Text to speech: POST https://api.groq.com/openai/v1/audio/speech
+//   Model canopylabs/orpheus-v1-english. input is at most 200 characters. voice austin.
+//   The body is wav audio, not JSON. https://console.groq.com/docs/text-to-speech/orpheus
 // - Photos: the same chat endpoint, model qwen/qwen3.8-27b. One image as a base64
 //   data URL in an image_url part. reasoning_effort none, which that model allows.
 //   https://console.groq.com/docs/vision
@@ -14,13 +17,19 @@ import type { AiTurn } from "@/lib/ai/types"
 
 const GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
 const GROQ_TRANSCRIPTIONS_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
+const GROQ_SPEECH_URL = "https://api.groq.com/openai/v1/audio/speech"
+/** Orpheus rejects a longer line. The app splits a passage into lines of this size. */
+export const SPEECH_CHAR_LIMIT = 200
 
 const TEXT_MODEL = () => process.env.GROQ_TEXT_MODEL?.trim() || "openai/gpt-oss-120b"
 const WHISPER_MODEL = () => process.env.GROQ_WHISPER_MODEL?.trim() || "whisper-large-v3"
 const VISION_MODEL = () => process.env.GROQ_VISION_MODEL?.trim() || "qwen/qwen3.8-27b"
+const SPEECH_MODEL = () => process.env.GROQ_SPEECH_MODEL?.trim() || "canopylabs/orpheus-v1-english"
+const SPEECH_VOICE = () => process.env.GROQ_SPEECH_VOICE?.trim() || "austin"
 
-export function aiModelFor(task: "text" | "transcribe" | "vision") {
+export function aiModelFor(task: "text" | "transcribe" | "speech" | "vision") {
   if (task === "transcribe") return WHISPER_MODEL()
+  if (task === "speech") return SPEECH_MODEL()
   if (task === "vision") return VISION_MODEL()
   return TEXT_MODEL()
 }
@@ -43,7 +52,7 @@ function groqKey() {
 
 export function aiProvidersConfigured() {
   const ready = Boolean(groqKey())
-  return { text: ready, voice: ready, vision: ready }
+  return { text: ready, voice: ready, speech: ready, vision: ready }
 }
 
 /** Drops a reasoning trace if one is still wrapped in the answer. */
@@ -63,6 +72,8 @@ export type AiResult = {
   text: string
   model: string
   usage: AiUsage
+  /** A data URL of wav audio, set only for text to speech. */
+  audio?: string
 }
 
 function usageNumber(usage: Record<string, unknown> | undefined, key: string) {
@@ -161,6 +172,35 @@ export async function transcribeAudio(file: Blob, filename: string) {
   const text = typeof (data as { text?: unknown } | null)?.text === "string" ? (data as { text: string }).text.trim() : ""
   if (!text) throw new AiProviderError("No speech was heard in that recording.")
   return { text, model: WHISPER_MODEL(), usage: readUsage(data) }
+}
+
+/** Groq Orpheus. One line, at most 200 characters, comes back as wav audio. */
+export async function synthesizeSpeech(text: string) {
+  const key = groqKey()
+  if (!key) throw new AiProviderError("Speech isn't available right now.", 503)
+  const input = text.trim()
+  if (!input) throw new AiProviderError("Type something to speak.", 400)
+  if (input.length > SPEECH_CHAR_LIMIT) throw new AiProviderError("That line is too long to speak.", 400)
+  const model = SPEECH_MODEL()
+  const response = await fetch(GROQ_SPEECH_URL, {
+    method: "POST",
+    headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
+    body: JSON.stringify({ model, input, voice: SPEECH_VOICE(), response_format: "wav" }),
+    cache: "no-store",
+  })
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "")
+    console.error(`Groq speech ${response.status}`, detail.slice(0, 400))
+    throw new AiProviderError("That line couldn't be spoken. Try again.")
+  }
+  const bytes = Buffer.from(await response.arrayBuffer())
+  if (bytes.length < 44) throw new AiProviderError("No speech came back. Try again.")
+  return {
+    text: input,
+    model,
+    usage: { promptTokens: null, completionTokens: null, totalTokens: null, audioSeconds: null },
+    audio: `data:audio/wav;base64,${bytes.toString("base64")}`,
+  }
 }
 
 function imageMediaType(type: string) {

@@ -61,7 +61,7 @@ export default async function AdminUserDetailPage({ params }: Props) {
 
         <Panel title="Adjust credits">
           <p className="mb-3 text-sm text-muted-foreground">
-            Changes the non-expiring pool only. Plan and Stripe stay untouched.
+            Changes the non-expiring pool only. The plan stays as it is.
           </p>
           <CreditAdjustForm userId={user.id} />
         </Panel>

@@ -76,7 +76,7 @@ function codeProblems(code: string, allowedImports: string[], chosenByPerson: st
 
   if (/api\.openai\.com|api\.groq\.com|generativelanguage\.googleapis\.com|from\s+["'](?:openai|groq|expo-audio|expo-av)["']|from\s+["']@google\//.test(code)) {
     problems.push(
-      `It calls an AI provider, or records audio, itself. Use askAi, transcribeAudio, analyzeImage, and useVoiceNote from "@/lib/ai". Never put an API key, a model name, or a provider URL in the app.`
+      `It calls an AI provider, or records audio, itself. Use askAi, speakText, transcribeAudio, analyzeImage, and useVoiceNote from "@/lib/ai". Never put an API key, a model name, or a provider URL in the app.`
     )
   }
 

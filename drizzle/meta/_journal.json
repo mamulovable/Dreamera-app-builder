@@ -127,6 +127,20 @@
       "when": 1795300000000,
       "tag": "0017_builder_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795400000000,
+      "tag": "0018_opay_payments",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1795500000000,
+      "tag": "0019_ai_speech",
+      "breakpoints": true
     }
   ]
 }

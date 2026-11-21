@@ -424,6 +424,31 @@ export const expoModules: Record<string, Record<string, unknown>> = {
       }
       return apiRef.current
     },
+    createAudioPlayer(source: { uri?: string } | string | null) {
+      const uri = typeof source === "string" ? source : source?.uri ?? ""
+      const audio = new Audio(uri)
+      return {
+        play() {
+          void audio.play()
+        },
+        remove() {
+          audio.pause()
+          audio.src = ""
+        },
+        addListener(event: string, callback: (status: { didJustFinish?: boolean }) => void) {
+          if (event !== "playbackStatusUpdate") return { remove() {} }
+          const onEnd = () => callback({ didJustFinish: true })
+          audio.addEventListener("ended", onEnd)
+          audio.addEventListener("error", onEnd)
+          return {
+            remove() {
+              audio.removeEventListener("ended", onEnd)
+              audio.removeEventListener("error", onEnd)
+            },
+          }
+        },
+      }
+    },
   },
   "expo-notifications": {
     setNotificationHandler() {},

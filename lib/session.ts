@@ -2,6 +2,7 @@ import { cookies } from "next/headers"
 import { eq } from "drizzle-orm"
 
 import { db, users, type User } from "@/db"
+import { endProPlan } from "@/lib/billing/credits"
 import { getAuthSession, type AuthUser } from "@/lib/cloudhike-auth"
 import type { PlanId } from "@/lib/plans"
 
@@ -72,7 +73,7 @@ export type SessionUser = {
   credits: number
   monthlyCredits: number
   plan: PlanId
-  /** When Pro renews, or ends if `cancelAtPeriodEnd`. */
+  /** When the paid Pro period ends. */
   currentPeriodEnd: string | null
   cancelAtPeriodEnd: boolean
   /** True when their email is in ADMIN_EMAILS. */
@@ -110,6 +111,18 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
   const session = await getAuthSession(token).catch(() => null)
   if (!session) return null
 
-  const user = await ensureUser(session.user)
+  let user = await ensureUser(session.user)
+  // OPay charges one month at a time, so Pro ends when that paid period is over.
+  if (user.plan === "pro" && user.currentPeriodEnd && user.currentPeriodEnd.getTime() <= Date.now()) {
+    await endProPlan(user.id, `ended:period:${user.currentPeriodEnd.toISOString()}`)
+    user = {
+      ...user,
+      plan: "free",
+      monthlyCredits: 0,
+      stripeSubscriptionId: null,
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+    }
+  }
   return toSessionUser(user, session.user)
 }

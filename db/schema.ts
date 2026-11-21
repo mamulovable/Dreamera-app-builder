@@ -72,6 +72,27 @@ export const creditTransactions = pgTable(
   (table) => [index("credit_transactions_user_id_idx").on(table.userId)]
 );
 
+/** One OPay Cashier attempt to pay for a month of Pro. `reference` is the id we send to OPay. */
+export const billingPayments = pgTable(
+  "billing_payments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    reference: text("reference").notNull().unique(),
+    orderNo: text("order_no"),
+    /** Minor units, such as kobo for NGN. */
+    amount: integer("amount").notNull(),
+    currency: text("currency").notNull(),
+    /** pending, success, or failed. */
+    status: text("status").default("pending").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    paidAt: timestamp("paid_at"),
+  },
+  (table) => [index("billing_payments_user_id_idx").on(table.userId)]
+);
+
 export const projectPlatform = pgEnum("project_platform", PROJECT_PLATFORMS);
 export const projectStatus = pgEnum("project_status", PROJECT_STATUSES);
 export const messageRole = pgEnum("message_role", ["user", "assistant"]);
@@ -406,7 +427,7 @@ export const webPublishes = pgTable("web_publishes", {
     .$onUpdate(() => new Date()),
 });
 
-export const aiCallTask = pgEnum("ai_call_task", ["text", "transcribe", "vision"]);
+export const aiCallTask = pgEnum("ai_call_task", ["text", "transcribe", "speech", "vision"]);
 export const aiCallStatus = pgEnum("ai_call_status", ["succeeded", "failed", "blocked"]);
 
 /** One AI request from a generated app. Snapshots keep the row readable after the project is deleted. */

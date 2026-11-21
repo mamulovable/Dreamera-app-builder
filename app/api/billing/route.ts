@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 
-import { BillingError, createCheckoutUrl, createPortalUrl, setDowngrade } from "@/lib/billing/stripe"
+import { BillingError, confirmCheckout, createCheckoutUrl, setDowngrade } from "@/lib/billing/opay"
 import { getCurrentUser } from "@/lib/session"
 
 function error(message: string, status: number) {
@@ -8,20 +8,23 @@ function error(message: string, status: number) {
 }
 
 /**
- * Changes the signed-in person's plan: `upgrade` and `manage` answer with a page
- * to send them to, and `downgrade` and `keep-pro` apply straight away.
+ * Changes the signed-in person's plan. `upgrade` answers with the OPay Cashier
+ * page. `confirm` checks a payment they just came back from. `downgrade` and
+ * `keep-pro` apply straight away.
  */
 export async function POST(request: Request) {
   const user = await getCurrentUser().catch(() => null)
   if (!user) return error("Please sign in to continue.", 401)
 
-  const body = (await request.json().catch(() => null)) as { action?: unknown } | null
+  const body = (await request.json().catch(() => null)) as { action?: unknown; reference?: unknown } | null
   try {
     switch (body?.action) {
       case "upgrade":
-        return NextResponse.json({ url: await createCheckoutUrl(user.id) })
       case "manage":
-        return NextResponse.json({ url: await createPortalUrl(user.id) })
+        return NextResponse.json({ url: await createCheckoutUrl(user.id) })
+      case "confirm":
+        if (typeof body.reference !== "string") return error("Invalid request.", 400)
+        return NextResponse.json(await confirmCheckout(user.id, body.reference))
       case "downgrade":
         await setDowngrade(user.id, true)
         return NextResponse.json({ ok: true })

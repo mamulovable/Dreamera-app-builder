@@ -3,7 +3,8 @@ import { getAdminAiCalls } from "@/lib/admin"
 
 const TASK_LABEL = {
   text: "Text",
-  transcribe: "Voice",
+  transcribe: "Speech to text",
+  speech: "Text to speech",
   vision: "Photo",
 } as const
 

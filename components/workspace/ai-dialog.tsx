@@ -1,16 +1,17 @@
 "use client"
 
 import * as React from "react"
-import { CheckCircle2Icon, ImageIcon, Loader2Icon, MicIcon, SparklesIcon, TypeIcon } from "lucide-react"
+import { CheckCircle2Icon, ImageIcon, Loader2Icon, MicIcon, SparklesIcon, TypeIcon, Volume2Icon } from "lucide-react"
 
 import type { AppAiAvailability } from "@/lib/ai/types"
-import { AI_DAILY_CREDIT_CAP, AI_TEXT_CREDITS, AI_VISION_CREDITS, AI_VOICE_CREDITS } from "@/lib/plans"
+import { AI_DAILY_CREDIT_CAP, AI_SPEECH_CREDITS, AI_TEXT_CREDITS, AI_VISION_CREDITS, AI_VOICE_CREDITS } from "@/lib/plans"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 const JOBS = [
   { key: "text" as const, icon: TypeIcon, label: "Text", detail: `${AI_TEXT_CREDITS} credit a reply` },
-  { key: "voice" as const, icon: MicIcon, label: "Voice", detail: `${AI_VOICE_CREDITS} credit a note` },
+  { key: "speech" as const, icon: Volume2Icon, label: "Text to speech", detail: `${AI_SPEECH_CREDITS} credit a line` },
+  { key: "voice" as const, icon: MicIcon, label: "Speech to text", detail: `${AI_VOICE_CREDITS} credit a note` },
   { key: "vision" as const, icon: ImageIcon, label: "Photos", detail: `${AI_VISION_CREDITS} credits a photo` },
 ]
 
@@ -50,7 +51,7 @@ export function AiDialog({
     return () => controller.abort()
   }, [open, projectId])
 
-  const ready = availability ? availability.text || availability.voice || availability.vision : false
+  const ready = availability ? availability.text || availability.speech || availability.voice || availability.vision : false
 
   async function setEnabled(next: boolean) {
     setPending(true)
@@ -69,7 +70,7 @@ export function AiDialog({
           <div className="min-w-0 space-y-0.5">
             <DialogTitle className="text-base font-semibold tracking-tight">{enabled ? "AI is on" : "Allow AI"}</DialogTitle>
             <DialogDescription>
-              {enabled ? "Text, voice, and photo questions in this app spend your credits." : "Turn on text, voice, and photo questions for this app."}
+              {enabled ? "Text, speech, and photo questions in this app spend your credits." : "Turn on text, speech, and photo questions for this app."}
             </DialogDescription>
           </div>
         </DialogHeader>

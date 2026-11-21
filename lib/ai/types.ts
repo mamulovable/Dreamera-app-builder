@@ -2,10 +2,13 @@
 export type AppAiAvailability = {
   enabled: boolean
   text: boolean
+  /** Speech to text. */
   voice: boolean
+  /** Text to speech. */
+  speech: boolean
   vision: boolean
 }
 
-export type AiTask = "text" | "transcribe" | "vision"
+export type AiTask = "text" | "transcribe" | "speech" | "vision"
 
 export type AiTurn = { role: "user" | "assistant"; content: string }

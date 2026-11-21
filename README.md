@@ -17,7 +17,7 @@
 - **Own your code.** Download a complete Expo project as a ZIP, or push it to GitHub.
 - **Publish.** Export `.aab`, `.apk`, and `.ipa` files, or publish a website, through your own Expo account.
 - **Share.** Share a project with someone by email, or make it public on the home page.
-- **Free and Pro plans.** Plan limits and usage credits, with subscriptions through Stripe.
+- **Free and Pro plans.** Plan limits and usage credits. Pro is one month at a time, paid through OPay Checkout.
 
 ## How it works
 
@@ -50,7 +50,7 @@ Six specialized agents share the work. Generated code runs in a sandboxed frame,
 | Generated apps | Expo, React Native, `react-native-web` for the preview, Expo Snack for phones |
 | Images | ImageKit |
 | Publishing | Expo Application Services (EAS) |
-| Payments | Stripe |
+| Payments | OPay Checkout |
 
 ## Getting started
 
@@ -98,7 +98,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `CLOUDHIKE_ENCRYPTION_KEY` | Encrypts stored tokens. Needed for Connect Backend, Push to GitHub, and Publish |
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | Push to GitHub |
 | `IMAGEKIT_ENABLED`, `IMAGEKIT_PRIVATE_KEY`, `IMAGEKIT_URL_ENDPOINT` | AI images. Without them, apps use placeholder images |
-| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRO_PRICE_ID` | Pro subscriptions |
+| `OPAY_MERCHANT_ID`, `OPAY_PUBLIC_KEY`, `OPAY_SECRET_KEY`, `OPAY_PRO_AMOUNT` | Pro, paid through OPay Checkout |
 | `GOOGLE_AI_API_KEY` | Gemini on Google AI. Required when Gemini is the primary or the fallback |
 | `AI_PRIMARY_PROVIDER` | `cloudhike` or `gemini`. Defaults to `cloudhike` |
 | `AI_FALLBACK_PROVIDER` | `cloudhike`, `gemini`, or `none`. Defaults to the other provider when its key is set |
@@ -147,7 +147,7 @@ lib/
   cloudhike/         Backends for generated apps
   publish/           Native builds and web publishing, through Expo
   github/            Push to GitHub
-  billing/           Credits and Stripe
+  billing/           Credits and OPay Checkout
 preview-runtime/     Runs generated apps in the browser
 db/                  Database schema
 drizzle/             Migrations

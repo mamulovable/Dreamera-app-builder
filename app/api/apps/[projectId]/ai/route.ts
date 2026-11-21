@@ -4,11 +4,11 @@ import { eq } from "drizzle-orm"
 
 import { db, projects } from "@/db"
 import { recordAiCall, type AiCallTask } from "@/lib/ai/log"
-import { AiProviderError, aiModelFor, analyzeImage, completeText, transcribeAudio, type AiResult } from "@/lib/ai/providers"
+import { AiProviderError, SPEECH_CHAR_LIMIT, aiModelFor, analyzeImage, completeText, synthesizeSpeech, transcribeAudio, type AiResult } from "@/lib/ai/providers"
 import type { AiTurn } from "@/lib/ai/types"
 import { assertAiBudget } from "@/lib/ai/usage"
 import { PlanLimitError, refundCredits, spendCredits } from "@/lib/billing/credits"
-import { AI_TEXT_CREDITS, AI_VISION_CREDITS, AI_VOICE_CREDITS } from "@/lib/plans"
+import { AI_SPEECH_CREDITS, AI_TEXT_CREDITS, AI_VISION_CREDITS, AI_VOICE_CREDITS } from "@/lib/plans"
 
 // Phones and the sandboxed preview call this. It uses no cookies. Audio and photos
 // are too large for the data API, so they have this route of their own.
@@ -90,15 +90,25 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   let run: () => Promise<AiResult>
 
   if (contentType.includes("application/json")) {
-    const body = (await request.json().catch(() => null)) as { task?: unknown; prompt?: unknown; history?: unknown } | null
-    if (body?.task !== "text") return fail("This call isn't a text question.", 400)
-    const prompt = typeof body.prompt === "string" ? body.prompt.trim() : ""
-    if (!prompt || prompt.length > MAX_PROMPT) return fail("Type a shorter message.", 400)
-    cost = AI_TEXT_CREDITS
-    task = "text"
-    inputPreview = prompt
-    const history = cleanHistory(body.history)
-    run = () => completeText(prompt, history)
+    const body = (await request.json().catch(() => null)) as { task?: unknown; prompt?: unknown; text?: unknown; history?: unknown } | null
+    if (body?.task === "speech") {
+      const spoken = typeof body.text === "string" ? body.text.trim() : ""
+      if (!spoken || spoken.length > SPEECH_CHAR_LIMIT) return fail("That line is too long to speak.", 400)
+      cost = AI_SPEECH_CREDITS
+      task = "speech"
+      inputPreview = spoken
+      run = () => synthesizeSpeech(spoken)
+    } else if (body?.task === "text") {
+      const prompt = typeof body.prompt === "string" ? body.prompt.trim() : ""
+      if (!prompt || prompt.length > MAX_PROMPT) return fail("Type a shorter message.", 400)
+      cost = AI_TEXT_CREDITS
+      task = "text"
+      inputPreview = prompt
+      const history = cleanHistory(body.history)
+      run = () => completeText(prompt, history)
+    } else {
+      return fail("This call isn't a text question.", 400)
+    }
   } else if (contentType.includes("multipart/form-data")) {
     const form = await request.formData().catch(() => null)
     if (!form) return fail("That file didn't upload.", 400)
@@ -165,7 +175,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       outputPreview: result.text,
       durationMs: Date.now() - started,
     })
-    return json({ text: result.text })
+    return json(result.audio ? { audio: result.audio } : { text: result.text })
   } catch (error) {
     let refunded = false
     try {

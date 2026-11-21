@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm"
 
 const PREVIEW_LENGTH = 500
 
-export type AiCallTask = "text" | "transcribe" | "vision"
+export type AiCallTask = "text" | "transcribe" | "speech" | "vision"
 export type AiCallStatus = "succeeded" | "failed" | "blocked"
 
 function preview(value: string | null | undefined) {
