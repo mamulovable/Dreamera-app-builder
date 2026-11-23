@@ -8,6 +8,7 @@ import {
   MAX_TABS,
   MIN_TABS,
   SCREEN_LAYOUTS,
+  parseMessageContent,
   type AppPlan,
   type ChatMessage,
 } from "@/lib/agent-protocol"
@@ -342,7 +343,23 @@ const TOOL_STATUS: Record<string, string> = {
 }
 
 function toInputItems(thread: Pick<ChatMessage, "role" | "content">[]): AgentInputItem[] {
-  return thread.map((m) => (m.role === "user" ? user(m.content) : assistant(m.content)))
+  return thread.map((m) => {
+    if (m.role === "assistant") return assistant(m.content)
+    const { assets } = parseMessageContent(m.content)
+    const imageAssets = assets.filter((a) => a.url && a.contentType.startsWith("image/"))
+    if (imageAssets.length === 0) {
+      return user(m.content)
+    }
+    const parts: Array<{ type: "input_text"; text: string } | { type: "input_image"; image: string }> = [
+      { type: "input_text", text: m.content },
+    ]
+    for (const img of imageAssets) {
+      if (img.url) {
+        parts.push({ type: "input_image", image: img.url })
+      }
+    }
+    return user(parts as unknown as string)
+  })
 }
 
 /**

@@ -190,7 +190,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       status: "failed",
       credits: cost,
       refunded,
-      error: message,
+      error: error instanceof AiProviderError && error.detail ? error.detail : message,
       durationMs: Date.now() - started,
     })
     return fail(message, error instanceof AiProviderError ? error.status : 502)

@@ -167,28 +167,81 @@ export type ElementContext = {
 
 export const MAX_ELEMENT_SNIPPET = 2000
 
+export type MessageAsset = {
+  id: string
+  fileName: string
+  contentType: string
+  url: string | null
+  size?: number
+}
+
+const ASSETS_BLOCK = /^<attached-assets>\n([\s\S]*?)\n<\/attached-assets>\n\n/
 const ELEMENT_BLOCK = /^<selected-element file="([^"]*)" line="(\d+)" label="([^"]*)" screen="([^"]*)">\n[\s\S]*?\n<\/selected-element>\n\n/
 
 const attributeText = (value: string) => value.replace(/["\n]/g, "")
 
+/** Formats a message with optional attached assets and selected element in front of it. */
+export function messageWithAssetsAndElement(
+  content: string,
+  element?: ElementContext | null,
+  assets?: MessageAsset[] | null
+) {
+  let prefix = ""
+  if (assets && assets.length > 0) {
+    prefix += `<attached-assets>\n${JSON.stringify(assets)}\n</attached-assets>\n\n`
+  }
+  if (element) {
+    const attributes = `file="${attributeText(element.file)}" line="${element.line}" label="${attributeText(element.label)}" screen="${attributeText(element.screen)}"`
+    prefix += `<selected-element ${attributes}>\n${element.snippet.slice(0, MAX_ELEMENT_SNIPPET)}\n</selected-element>\n\n`
+  }
+  return prefix + content
+}
+
 /** A chat message with its element in front of it. It's saved like this, so the agent still knows on later turns. */
 export function messageWithElement(content: string, element: ElementContext) {
-  const attributes = `file="${attributeText(element.file)}" line="${element.line}" label="${attributeText(element.label)}" screen="${attributeText(element.screen)}"`
-  return `<selected-element ${attributes}>\n${element.snippet.slice(0, MAX_ELEMENT_SNIPPET)}\n</selected-element>\n\n${content}`
+  return messageWithAssetsAndElement(content, element, null)
+}
+
+/** Parses what the person wrote, the element they attached, and any attached assets. */
+export function parseMessageContent(content: string): {
+  text: string
+  element: ElementContext | null
+  assets: MessageAsset[]
+} {
+  let remaining = content
+  let assets: MessageAsset[] = []
+  let element: ElementContext | null = null
+
+  const assetsMatch = remaining.match(ASSETS_BLOCK)
+  if (assetsMatch) {
+    try {
+      assets = JSON.parse(assetsMatch[1])
+    } catch {
+      // ignore
+    }
+    remaining = remaining.slice(assetsMatch[0].length)
+  }
+
+  const elementMatch = remaining.match(ELEMENT_BLOCK)
+  if (elementMatch) {
+    element = { file: elementMatch[1], line: Number(elementMatch[2]), label: elementMatch[3], screen: elementMatch[4], snippet: "" }
+    remaining = remaining.slice(elementMatch[0].length)
+  }
+
+  return { text: remaining, element, assets }
 }
 
 /** What the person wrote, and the element they attached to it. */
 export function splitElementMessage(content: string) {
-  const match = content.match(ELEMENT_BLOCK)
-  if (!match) return { text: content, element: null }
-  return { text: content.slice(match[0].length), element: { file: match[1], line: Number(match[2]), label: match[3], screen: match[4] } }
+  const { text, element } = parseMessageContent(content)
+  return { text, element }
 }
 
 /** What the client asks the agent to do. */
 export type AgentRequest =
   /** Pick up where the project is: answer a waiting prompt or resume a build. */
   | { action: "start" }
-  | { action: "message"; content: string; element?: ElementContext }
+  | { action: "message"; content: string; element?: ElementContext; assets?: MessageAsset[] }
   | { action: "confirm" }
   /** Rebuild one screen that failed. Finished screens stay as they are. */
   | { action: "retry"; screenId: string }

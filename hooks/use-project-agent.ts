@@ -4,6 +4,7 @@ import * as React from "react"
 
 import {
   componentFilePath,
+  messageWithAssetsAndElement,
   messageWithElement,
   type AgentEvent,
   type AgentRequest,
@@ -199,7 +200,7 @@ export function useProjectAgent(
           ? {
               id: `local-${Date.now()}`,
               role: "user" as const,
-              content: request.element ? messageWithElement(request.content, request.element) : request.content,
+              content: messageWithAssetsAndElement(request.content, request.element, request.assets),
             }
           : request.action === "confirm"
             ? { id: `local-${Date.now()}`, role: "user" as const, content: "Looks good, build it!" }

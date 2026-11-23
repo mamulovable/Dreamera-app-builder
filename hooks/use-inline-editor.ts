@@ -3,7 +3,7 @@
 import * as React from "react"
 
 import type { useProjectAgent } from "@/hooks/use-project-agent"
-import { componentFilePath, type AppPlan, type ProjectScreen } from "@/lib/agent-protocol"
+import { componentFilePath, type AppPlan, type MessageAsset, type ProjectScreen } from "@/lib/agent-protocol"
 import { useAuth } from "@/lib/auth-client"
 import { isUpgradeReason } from "@/lib/plans"
 import { useUpgradeDialog } from "@/components/billing/upgrade-dialog"
@@ -337,10 +337,12 @@ export function useInlineEditor(projectId: string, agent: Agent, imageTools: boo
 
   /** Saves what's waiting, then sends the message with the selected element if it's attached, or if `aboutSelection`. */
   const sendMessage = React.useCallback(
-    async (content: string, aboutSelection = false) => {
+    async (content: string, aboutSelectionOrAssets?: boolean | MessageAsset[], messageAssets?: MessageAsset[]) => {
       await flush()
+      const aboutSelection = typeof aboutSelectionOrAssets === "boolean" ? aboutSelectionOrAssets : false
+      const assets = Array.isArray(aboutSelectionOrAssets) ? aboutSelectionOrAssets : messageAssets
       const current = aboutSelection || attachedRef.current ? selectionRef.current : null
-      if (!current) return send({ action: "message", content })
+      if (!current) return send({ action: "message", content, assets })
       const file = filesRef.current[current.file]
       const code = file?.base ?? fileCode(current.file) ?? ""
       // The file and line still lead the agent there if the code can't be read here.
@@ -352,6 +354,7 @@ export function useInlineEditor(projectId: string, agent: Agent, imageTools: boo
         action: "message",
         content,
         element: { file: current.file, line, label: ELEMENT_LABELS[current.type] ?? current.type, screen, snippet },
+        assets,
       })
       if (sent) setAttached(false)
       return sent

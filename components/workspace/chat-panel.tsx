@@ -8,19 +8,21 @@ import {
   ChevronRightIcon,
   EyeIcon,
   FileTextIcon,
+  ImageIcon,
   MessageSquarePlusIcon,
   PaperclipIcon,
   RotateCwIcon,
   SparklesIcon,
   SquareDashedMousePointerIcon,
+  UploadCloudIcon,
   XIcon,
 } from "lucide-react"
 
 import type { InlineEditor } from "@/hooks/use-inline-editor"
 import type { useProjectAgent } from "@/hooks/use-project-agent"
-import { splitElementMessage, type ChatMessage } from "@/lib/agent-protocol"
+import { parseMessageContent, splitElementMessage, type ChatMessage, type MessageAsset } from "@/lib/agent-protocol"
 import { ELEMENT_LABELS } from "@/lib/preview-protocol"
-import { isHtmlWebsite, MAX_PROMPT_LENGTH, type ProjectPlatform } from "@/lib/projects"
+import { ACCEPTED_ASSET_TYPES, isAcceptedAsset, isHtmlWebsite, MAX_ASSET_SIZE, MAX_ASSETS, MAX_PROMPT_LENGTH, type ProjectPlatform } from "@/lib/projects"
 import { cn } from "@/lib/utils"
 import {
   AlertDialog,
@@ -34,6 +36,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Spinner } from "@/components/ui/spinner"
 import { BuildProgress } from "@/components/workspace/build-progress"
 import { PlanCard, type PlanCardState } from "@/components/workspace/plan-card"
@@ -51,19 +54,34 @@ export type ChatAsset = {
 // How close to the bottom (px) still counts as "following" the conversation.
 const FOLLOW_THRESHOLD = 120
 
+export type ChatPromptFile = {
+  id: string
+  file: File
+  previewUrl?: string
+}
+
 export function ChatPanel({
   agent,
   assets,
   editor,
   platform,
+  projectId,
 }: {
   agent: Agent
   assets: ChatAsset[]
   editor: InlineEditor
   platform: ProjectPlatform
+  projectId: string
 }) {
   const [draft, setDraft] = React.useState("")
+  const [files, setFiles] = React.useState<ChatPromptFile[]>([])
+  const [isUploading, setIsUploading] = React.useState(false)
+  const [fileError, setFileError] = React.useState<string | null>(null)
+  const [previewImage, setPreviewImage] = React.useState<{ fileName: string; url: string } | null>(null)
+  const [isDragging, setIsDragging] = React.useState(false)
   const [newSessionOpen, setNewSessionOpen] = React.useState(false)
+  const fileInputRef = React.useRef<HTMLInputElement>(null)
+  const dragDepth = React.useRef(0)
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const following = React.useRef(true)
   const { messages, status, busy, activity, streamingText, reasoning, error, screens, send, startNewSession, sessionRestarted } = agent
@@ -81,9 +99,21 @@ export function ChatPanel({
         void send({ action: "confirm" })
       }
   const showBuild = screens.length > 0 && status === "building"
-  const inputLocked = busy || status === "building"
+  const inputLocked = busy || status === "building" || isUploading
   const attachment = editor.attached ? editor.selection : null
   const attachmentLabel = attachment && (ELEMENT_LABELS[attachment.type] ?? attachment.type)
+
+  // Revoke object URLs on unmount.
+  const filesRef = React.useRef(files)
+  React.useEffect(() => {
+    filesRef.current = files
+  }, [files])
+  React.useEffect(
+    () => () => {
+      filesRef.current.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl))
+    },
+    []
+  )
 
   // Keep the newest output in view while the agent streams, unless the person scrolled up.
   React.useEffect(() => {
@@ -97,14 +127,121 @@ export function ChatPanel({
     return "pending"
   }
 
+  function addFiles(incoming: FileList | File[]) {
+    const list = Array.from(incoming)
+    if (list.length === 0) return
+
+    const unsupported = list.filter((f) => !isAcceptedAsset(f.name, f.type))
+    const tooLarge = list.filter((f) => f.size > MAX_ASSET_SIZE)
+    const valid = list.filter((f) => f.size <= MAX_ASSET_SIZE && isAcceptedAsset(f.name, f.type))
+    const room = MAX_ASSETS - files.length
+    const accepted = valid.slice(0, Math.max(room, 0))
+
+    if (unsupported.length > 0) {
+      setFileError("Attach images, PDFs, or text files (.txt, .md, .json, .csv).")
+    } else if (tooLarge.length > 0) {
+      setFileError("Files must be under 10 MB.")
+    } else if (valid.length > accepted.length) {
+      setFileError(`You can attach up to ${MAX_ASSETS} files.`)
+    } else {
+      setFileError(null)
+    }
+
+    setFiles((prev) => [
+      ...prev,
+      ...accepted.map((file) => ({
+        id: crypto.randomUUID(),
+        file,
+        previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
+      })),
+    ])
+  }
+
+  function removeFile(id: string) {
+    setFiles((prev) => {
+      const target = prev.find((f) => f.id === id)
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl)
+      return prev.filter((f) => f.id !== id)
+    })
+    setFileError(null)
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const pasted = Array.from(e.clipboardData.files)
+    if (pasted.length > 0) {
+      e.preventDefault()
+      if (inputLocked) return
+      addFiles(pasted)
+    }
+  }
+
+  function handleDragEnter(e: React.DragEvent) {
+    e.preventDefault()
+    dragDepth.current++
+    if (e.dataTransfer.types.includes("Files")) setIsDragging(true)
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault()
+    dragDepth.current--
+    if (dragDepth.current <= 0) {
+      dragDepth.current = 0
+      setIsDragging(false)
+    }
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault()
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    dragDepth.current = 0
+    setIsDragging(false)
+    if (inputLocked) return
+    if (e.dataTransfer.files) addFiles(e.dataTransfer.files)
+  }
+
   async function handleSubmit(event?: React.FormEvent) {
     event?.preventDefault()
     const content = draft.trim()
-    if (!content || inputLocked) return
+    if ((!content && files.length === 0) || inputLocked) return
     following.current = true
+    setFileError(null)
+
+    let uploadedAssets: MessageAsset[] = []
+    if (files.length > 0) {
+      setIsUploading(true)
+      try {
+        const formData = new FormData()
+        files.forEach((f) => formData.append("files", f.file))
+        const res = await fetch(`/api/projects/${projectId}/assets`, {
+          method: "POST",
+          body: formData,
+        })
+        const data = await res.json().catch(() => null)
+        if (!res.ok) {
+          throw new Error(data?.error ?? "Couldn't upload attached files.")
+        }
+        uploadedAssets = (data.assets as MessageAsset[]) ?? []
+      } catch (err) {
+        setIsUploading(false)
+        setFileError(err instanceof Error ? err.message : "Couldn't upload attached files.")
+        return
+      }
+      setIsUploading(false)
+    }
+
+    const promptText = content || (uploadedAssets.length > 0 ? "Please review the attached reference image(s) and update the app." : "")
     setDraft("")
-    // Put the text back if the agent didn't take it.
-    if (!(await editor.sendMessage(content).catch(() => false))) setDraft((d) => d || content)
+    const currentFiles = [...files]
+    setFiles([])
+
+    // Put the text and files back if the agent didn't take it.
+    if (!(await editor.sendMessage(promptText, uploadedAssets).catch(() => false))) {
+      setDraft((d) => d || promptText)
+      setFiles(currentFiles)
+    }
   }
 
   return (
@@ -194,7 +331,7 @@ export function ChatPanel({
             >
               {message.role === "assistant" && <AgentAvatar />}
               {message.role === "user" ? (
-                <UserMessage content={message.content} />
+                <UserMessage content={message.content} onPreviewImage={setPreviewImage} />
               ) : (
                 <div className="min-w-0 flex-1 space-y-3 pt-1">
                   <span className="sr-only">Agent: </span>
@@ -211,7 +348,7 @@ export function ChatPanel({
                   )}
                 </div>
               )}
-              {message.id === firstUserId && assets.length > 0 && (
+              {message.id === firstUserId && assets.length > 0 && parseMessageContent(message.content).assets.length === 0 && (
                 <ul aria-label="Attached files" className="flex w-full flex-wrap justify-end gap-1.5">
                   {assets.map((asset) => (
                     <li key={asset.id}>
@@ -280,9 +417,27 @@ export function ChatPanel({
           This project was shared with you to view, so only its owner can ask the agent for changes.
         </p>
       ) : (
-      <form onSubmit={handleSubmit} className="shrink-0 p-3">
-        <div className="rounded-3xl bg-linear-to-br from-brand/40 via-white to-brand-accent/40 p-px shadow-[0_12px_32px_-16px_rgba(76,29,149,0.35)] transition-colors focus-within:from-brand focus-within:to-brand-accent">
-          <div className="rounded-[calc(1.5rem-1px)] bg-white p-2">
+      <form
+        onSubmit={handleSubmit}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        className="relative shrink-0 p-3"
+      >
+        <div
+          className={cn(
+            "rounded-3xl bg-linear-to-br from-brand/40 via-white to-brand-accent/40 p-px shadow-[0_12px_32px_-16px_rgba(76,29,149,0.35)] transition-colors focus-within:from-brand focus-within:to-brand-accent",
+            isDragging && "from-brand to-brand ring-2 ring-brand/50"
+          )}
+        >
+          <div className="relative rounded-[calc(1.5rem-1px)] bg-white p-2">
+            {isDragging && (
+              <div className="pointer-events-none absolute inset-1.5 z-10 flex flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-brand/40 bg-brand/5 text-brand-dark backdrop-blur-xs">
+                <UploadCloudIcon className="size-6 text-brand" />
+                <p className="text-xs font-medium">Drop images or files to attach</p>
+              </div>
+            )}
             {attachment && (
               <div className="mb-1 flex max-w-full items-center gap-1.5 self-start">
                 <span className="flex min-w-0 items-center gap-1.5 rounded-full border border-brand/25 bg-brand/5 py-0.5 pr-0.5 pl-2 text-xs text-brand-dark">
@@ -300,6 +455,53 @@ export function ChatPanel({
                 </span>
               </div>
             )}
+            {files.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-1.5 px-0.5">
+                {files.map((item) => (
+                  <span
+                    key={item.id}
+                    className="flex items-center gap-1.5 rounded-xl border border-brand/20 bg-brand/5 p-1 pr-1.5 text-xs text-brand-dark"
+                  >
+                    {item.previewUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => setPreviewImage({ fileName: item.file.name, url: item.previewUrl! })}
+                        className="size-7 overflow-hidden rounded-lg border border-brand/15 bg-white"
+                        aria-label={`Preview ${item.file.name}`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={item.previewUrl} alt="" className="size-full object-cover" />
+                      </button>
+                    ) : (
+                      <span className="flex size-7 items-center justify-center rounded-lg bg-white">
+                        <FileTextIcon className="size-3.5 text-brand" />
+                      </span>
+                    )}
+                    <span className="max-w-28 truncate font-medium">{item.file.name}</span>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${item.file.name}`}
+                      onClick={() => removeFile(item.id)}
+                      disabled={isUploading}
+                      className="flex size-4 shrink-0 items-center justify-center rounded-full hover:bg-brand/15"
+                    >
+                      <XIcon className="size-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept={ACCEPTED_ASSET_TYPES}
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files) addFiles(e.target.files)
+                e.target.value = ""
+              }}
+            />
             <label htmlFor="chat-prompt" className="sr-only">
               Tell Dreamera what you want to change
             </label>
@@ -313,6 +515,7 @@ export function ChatPanel({
                   void handleSubmit()
                 }
               }}
+              onPaste={handlePaste}
               maxLength={MAX_PROMPT_LENGTH}
               rows={2}
               disabled={status === "building"}
@@ -331,38 +534,78 @@ export function ChatPanel({
               }
               className="field-sizing-content block max-h-40 min-h-12 w-full resize-none bg-transparent px-2 pt-1.5 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/70 disabled:cursor-not-allowed"
             />
+            {fileError && (
+              <p role="alert" className="px-2 pt-1 pb-1 text-xs text-red-600">
+                {fileError}
+              </p>
+            )}
             <div className="flex items-center justify-between">
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
                 aria-label="Attach file"
-                className="rounded-full text-muted-foreground hover:bg-brand/10 hover:text-brand-dark"
+                disabled={inputLocked || files.length >= MAX_ASSETS}
+                onClick={() => fileInputRef.current?.click()}
+                className={cn(
+                  "relative rounded-full text-muted-foreground hover:bg-brand/10 hover:text-brand-dark",
+                  files.length > 0 && "bg-brand/10 text-brand-dark"
+                )}
               >
-                <PaperclipIcon />
+                <PaperclipIcon className="size-4" />
+                {files.length > 0 && (
+                  <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-brand text-[10px] font-bold text-white">
+                    {files.length}
+                  </span>
+                )}
               </Button>
               <Button
                 type="submit"
                 size="icon"
-                disabled={!draft.trim() || inputLocked}
-                aria-label={busy ? "The agent is working" : "Send message"}
+                disabled={(!draft.trim() && files.length === 0) || inputLocked}
+                aria-label={busy || isUploading ? "The agent is working" : "Send message"}
                 className="rounded-full bg-brand text-white shadow-md shadow-brand/30 hover:opacity-95 disabled:from-muted disabled:to-muted disabled:text-muted-foreground disabled:opacity-100 disabled:shadow-none"
               >
-                {busy ? <Spinner className="text-current" /> : <ArrowUpIcon />}
+                {busy || isUploading ? <Spinner className="text-current" /> : <ArrowUpIcon />}
               </Button>
             </div>
           </div>
         </div>
       </form>
       )}
+
+      <Dialog
+        open={previewImage !== null}
+        onOpenChange={(open) => !open && setPreviewImage(null)}
+      >
+        <DialogContent className="gap-3 rounded-[1.75rem] p-3 sm:max-w-2xl">
+          <DialogTitle className="truncate px-1 pr-8 text-sm font-medium">
+            {previewImage?.fileName}
+          </DialogTitle>
+          {previewImage?.url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={previewImage.url}
+              alt={previewImage.fileName}
+              className="max-h-[70vh] w-full rounded-2xl bg-muted object-contain"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }
 
-function UserMessage({ content }: { content: string }) {
-  const { text, element } = splitElementMessage(content)
+function UserMessage({
+  content,
+  onPreviewImage,
+}: {
+  content: string
+  onPreviewImage?: (asset: { fileName: string; url: string }) => void
+}) {
+  const { text, element, assets } = parseMessageContent(content)
   return (
-    <div className="flex max-w-[85%] flex-col items-end gap-1">
+    <div className="flex max-w-[85%] flex-col items-end gap-1.5">
       {element && (
         <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-brand/25 bg-brand/5 px-2 py-0.5 text-[11px] text-brand-dark">
           <SquareDashedMousePointerIcon className="size-3 shrink-0" />
@@ -371,10 +614,43 @@ function UserMessage({ content }: { content: string }) {
           </span>
         </span>
       )}
-      <p className="rounded-2xl rounded-br-md bg-linear-to-br from-brand to-brand-dark px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap text-white shadow-sm shadow-brand/20">
-        <span className="sr-only">You: </span>
-        {text}
-      </p>
+      {assets.length > 0 && (
+        <ul aria-label="Attached files" className="flex w-full flex-wrap justify-end gap-1.5">
+          {assets.map((asset) => (
+            <li key={asset.id || asset.fileName}>
+              {asset.url && asset.contentType.startsWith("image/") ? (
+                <button
+                  type="button"
+                  onClick={() => onPreviewImage?.({ fileName: asset.fileName, url: asset.url! })}
+                  className="group relative flex size-16 overflow-hidden rounded-xl border border-brand/20 bg-muted transition-transform hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                  aria-label={`View ${asset.fileName} full size`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={asset.url} alt={asset.fileName} className="size-full object-cover" />
+                </button>
+              ) : (
+                <a
+                  href={asset.url ?? undefined}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex max-w-44 items-center gap-1.5 rounded-xl border border-border/60 bg-muted/40 p-1 pr-2.5 text-xs text-muted-foreground transition-colors hover:border-brand/25 hover:text-brand-dark"
+                >
+                  <span className="flex size-7 items-center justify-center rounded-lg bg-white">
+                    <FileTextIcon className="size-3.5 text-brand" />
+                  </span>
+                  <span className="truncate">{asset.fileName}</span>
+                </a>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {text ? (
+        <p className="rounded-2xl rounded-br-md bg-linear-to-br from-brand to-brand-dark px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap text-white shadow-sm shadow-brand/20">
+          <span className="sr-only">You: </span>
+          {text}
+        </p>
+      ) : null}
     </div>
   )
 }

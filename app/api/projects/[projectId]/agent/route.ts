@@ -2,7 +2,14 @@ import { NextResponse } from "next/server"
 import { and, desc, eq } from "drizzle-orm"
 
 import { db, messages, projectAssets, projects, screens, type Project } from "@/db"
-import { messageWithElement, type AgentEvent, type AgentRequest, type ElementContext } from "@/lib/agent-protocol"
+import {
+  messageWithAssetsAndElement,
+  messageWithElement,
+  type AgentEvent,
+  type AgentRequest,
+  type ElementContext,
+  type MessageAsset,
+} from "@/lib/agent-protocol"
 import { activeBuild, followBuild, startBuild } from "@/lib/agent/builds"
 import { applyAppChanges } from "@/lib/agent/changes"
 import { runPlannerTurn } from "@/lib/agent/planner"
@@ -65,7 +72,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
       throw cause
     }
     const element = readElementContext(body.element)
-    await db.insert(messages).values({ projectId: project.id, role: "user", content: element ? messageWithElement(content, element) : content })
+    const assets = readAssetsContext(body.assets)
+    const formatted = messageWithAssetsAndElement(content, element, assets)
+    await db.insert(messages).values({ projectId: project.id, role: "user", content: formatted })
     return streamRun(startRun(project.id, (run) => respond(run, project, user, origin)), request)
   }
 
@@ -145,6 +154,19 @@ function readElementContext(value: unknown): ElementContext | null {
   if (typeof file !== "string" || typeof label !== "string" || typeof screen !== "string" || typeof snippet !== "string") return null
   if (!Number.isInteger(line)) return null
   return { file: file.slice(0, 200), line: line!, label: label.slice(0, 60), screen: screen.slice(0, 120), snippet }
+}
+
+function readAssetsContext(value: unknown): MessageAsset[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .filter((a): a is MessageAsset => Boolean(a && typeof a === "object" && typeof a.fileName === "string"))
+    .map((a) => ({
+      id: typeof a.id === "string" ? a.id : crypto.randomUUID(),
+      fileName: String(a.fileName).slice(0, 100),
+      contentType: typeof a.contentType === "string" ? a.contentType : "application/octet-stream",
+      url: typeof a.url === "string" ? a.url : null,
+      size: typeof a.size === "number" ? a.size : undefined,
+    }))
 }
 
 /** One planner turn, then the build if the person confirmed the plan or asked to change the built app. */

@@ -40,9 +40,23 @@ const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif
 export class AiProviderError extends Error {
   constructor(
     message: string,
-    readonly status = 502
+    readonly status = 502,
+    /** Provider reason for the admin log. The app still shows message. */
+    readonly detail?: string
   ) {
     super(message)
+  }
+}
+
+function groqError(body: string) {
+  try {
+    const error = (JSON.parse(body) as { error?: { message?: unknown; code?: unknown } }).error
+    return {
+      code: typeof error?.code === "string" ? error.code : "",
+      message: typeof error?.message === "string" ? error.message.slice(0, 300) : "",
+    }
+  } catch {
+    return { code: "", message: "" }
   }
 }
 
@@ -174,11 +188,23 @@ export async function transcribeAudio(file: Blob, filename: string) {
   return { text, model: WHISPER_MODEL(), usage: readUsage(data) }
 }
 
+/** Drops a voice label the builder sometimes sticks on the front of the spoken line. */
+function spokenWords(text: string) {
+  return text.replace(/^[A-Z][a-z]+ (?:Male|Female)\. [A-Z][a-z]+\. (?:Male|Female)\. [a-z]{2}-[A-Z]{2}\.\s+/, "").trim()
+}
+
+function speechPause(message: string) {
+  const wait = message.match(/try again in [^.]+/i)?.[0]?.replace(/^try again in /i, "").trim()
+  return wait
+    ? `Speech is paused. This Groq account has used its daily voice allowance. Try again in ${wait}.`
+    : "Speech is paused. This Groq account has used its daily voice allowance. Try again later."
+}
+
 /** Groq Orpheus. One line, at most 200 characters, comes back as wav audio. */
 export async function synthesizeSpeech(text: string) {
   const key = groqKey()
   if (!key) throw new AiProviderError("Speech isn't available right now.", 503)
-  const input = text.trim()
+  const input = spokenWords(text.trim())
   if (!input) throw new AiProviderError("Type something to speak.", 400)
   if (input.length > SPEECH_CHAR_LIMIT) throw new AiProviderError("That line is too long to speak.", 400)
   const model = SPEECH_MODEL()
@@ -189,9 +215,20 @@ export async function synthesizeSpeech(text: string) {
     cache: "no-store",
   })
   if (!response.ok) {
-    const detail = await response.text().catch(() => "")
-    console.error(`Groq speech ${response.status}`, detail.slice(0, 400))
-    throw new AiProviderError("That line couldn't be spoken. Try again.")
+    const body = await response.text().catch(() => "")
+    const reason = groqError(body)
+    console.error(`Groq speech ${response.status}`, (reason.message || body).slice(0, 400))
+    if (reason.code === "model_terms_required") {
+      throw new AiProviderError(
+        "Speech isn't available until the Orpheus terms are accepted on Groq.",
+        503,
+        reason.message
+      )
+    }
+    if (reason.code === "rate_limit_exceeded" || response.status === 429) {
+      throw new AiProviderError(speechPause(reason.message), 429, reason.message)
+    }
+    throw new AiProviderError("That line couldn't be spoken. Try again.", 502, reason.message || undefined)
   }
   const bytes = Buffer.from(await response.arrayBuffer())
   if (bytes.length < 44) throw new AiProviderError("No speech came back. Try again.")

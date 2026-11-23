@@ -225,7 +225,7 @@ export function WorkspaceLayout({
       onDisconnect={() => agent.changeBackend("DELETE")}
     />
   )
-  const chat = <ChatPanel agent={agent} assets={assets} editor={editor} platform={project.platform} />
+  const chat = <ChatPanel agent={agent} assets={assets} editor={editor} platform={project.platform} projectId={project.id} />
   // Rebuilt only when what the running app sees changes: not for code still streaming in,
   // or for the active theme, which reaches it on its own so switching never reloads the app.
   // Edits made by hand reach it on their own too, so it runs the code from before them.
