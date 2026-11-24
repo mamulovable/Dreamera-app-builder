@@ -8,7 +8,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { AiProviderName, BuilderRoute } from "@/lib/agent/provider-settings"
 
-const NAMES: Record<AiProviderName, string> = { cloudhike: "CloudHike", gemini: "Gemini" }
+const PROVIDERS: AiProviderName[] = ["cloudhike", "gemini", "openrouter"]
+const NAMES: Record<AiProviderName, string> = {
+  cloudhike: "CloudHike",
+  gemini: "Gemini",
+  openrouter: "OpenRouter",
+}
 
 export function BuilderProviderForm({ route }: { route: BuilderRoute }) {
   const router = useRouter()
@@ -20,7 +25,9 @@ export function BuilderProviderForm({ route }: { route: BuilderRoute }) {
 
   const current = overrides[primary]
   const defaults = route.defaults[primary]
-  const fallback = primary === "cloudhike" ? "gemini" : "cloudhike"
+  const otherReady = PROVIDERS.find((name) => name !== primary && route.ready[name])
+  const fallbackHint =
+    route.fallback !== "none" ? NAMES[route.fallback] : otherReady ? NAMES[otherReady] : null
 
   function setModel(field: "planner" | "builder", value: string) {
     setOverrides((previous) => ({
@@ -44,6 +51,8 @@ export function BuilderProviderForm({ route }: { route: BuilderRoute }) {
           cloudhikeBuilderModel: overrides.cloudhike.builder ?? "",
           geminiPlannerModel: overrides.gemini.planner ?? "",
           geminiBuilderModel: overrides.gemini.builder ?? "",
+          openrouterPlannerModel: overrides.openrouter.planner ?? "",
+          openrouterBuilderModel: overrides.openrouter.builder ?? "",
         }),
       })
       const body = (await response.json().catch(() => null)) as { error?: string } | null
@@ -73,12 +82,12 @@ export function BuilderProviderForm({ route }: { route: BuilderRoute }) {
             onChange={(event) => setPrimary(event.target.value as AiProviderName)}
             className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
           >
-            <option value="cloudhike" disabled={!route.ready.cloudhike}>
-              CloudHike{route.ready.cloudhike ? "" : " (not set up)"}
-            </option>
-            <option value="gemini" disabled={!route.ready.gemini}>
-              Gemini{route.ready.gemini ? "" : " (not set up)"}
-            </option>
+            {PROVIDERS.map((name) => (
+              <option key={name} value={name} disabled={!route.ready[name]}>
+                {NAMES[name]}
+                {route.ready[name] ? "" : " (not set up)"}
+              </option>
+            ))}
           </select>
         </div>
         <div className="space-y-1.5">
@@ -107,7 +116,8 @@ export function BuilderProviderForm({ route }: { route: BuilderRoute }) {
           {busy ? "Saving…" : "Save provider"}
         </Button>
         <p className="text-xs text-muted-foreground">
-          Leave a model blank to keep the default. {route.ready[fallback] ? `${NAMES[fallback]} stays the fallback.` : `${NAMES[fallback]} has no key, so there is no fallback.`}
+          Leave a model blank to keep the default.
+          {fallbackHint ? ` ${fallbackHint} stays the fallback.` : " No other provider has a key, so there is no fallback."}
         </p>
       </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}

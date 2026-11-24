@@ -17,16 +17,19 @@ import {
   envModels,
   envPrimary,
   geminiCredentials,
+  openrouterCredentials,
   providerReady,
   readBuilderRoute,
+  type AiProviderName,
 } from "@/lib/agent/provider-settings"
 import { PLANS } from "@/lib/plans"
 
-// The OpenAI Agents SDK talks to an OpenAI-compatible endpoint: CloudHike or
-// Gemini on Google AI. Both serve Chat Completions (not the Responses API), and
-// traces would go to OpenAI's dashboard. The admin builder page chooses which
-// provider runs first, and which model ids to send. The env values are the default.
-// If that call fails before any output, the same request is sent to the fallback.
+// The OpenAI Agents SDK talks to an OpenAI-compatible endpoint: CloudHike,
+// Gemini on Google AI, or OpenRouter. All serve Chat Completions (not the
+// Responses API), and traces would go to OpenAI's dashboard. The admin builder
+// page chooses which provider runs first, and which model ids to send. The env
+// values are the default. If that call fails before any output, the same
+// request is sent to the fallback.
 
 type ModelRole = "planner" | "builder"
 
@@ -248,17 +251,35 @@ function geminiClient() {
   })
 }
 
+function openrouterClient() {
+  const credentials = openrouterCredentials()
+  if (!credentials) throw new Error("OPENROUTER_API_KEY must be set to use OpenRouter.")
+  const referer = process.env.NEXT_PUBLIC_APP_URL?.trim()
+  return new OpenAI({
+    baseURL: credentials.baseURL,
+    apiKey: credentials.apiKey,
+    maxRetries: 0,
+    defaultHeaders: {
+      ...(referer ? { "HTTP-Referer": referer } : {}),
+      "X-Title": "AppForge",
+    },
+    fetch: fetchWithBackoff("OpenRouter"),
+  })
+}
+
 export function configureAgents() {
   if (configured) return
-  const clients = {
+  const clients: Record<AiProviderName, OpenAI | null> = {
     cloudhike: providerReady("cloudhike") ? cloudhikeClient() : null,
     gemini: providerReady("gemini") ? geminiClient() : null,
+    openrouter: providerReady("openrouter") ? openrouterClient() : null,
   }
-  const adapters = {
+  const adapters: Record<AiProviderName, OpenAIProvider | null> = {
     cloudhike: clients.cloudhike ? new OpenAIProvider({ openAIClient: clients.cloudhike, useResponses: false }) : null,
     gemini: clients.gemini ? new OpenAIProvider({ openAIClient: clients.gemini, useResponses: false }) : null,
+    openrouter: clients.openrouter ? new OpenAIProvider({ openAIClient: clients.openrouter, useResponses: false }) : null,
   }
-  const defaultClient = clients[envPrimary()] ?? clients.cloudhike ?? clients.gemini
+  const defaultClient = clients[envPrimary()] ?? clients.cloudhike ?? clients.gemini ?? clients.openrouter
   if (defaultClient) setDefaultOpenAIClient(defaultClient)
   setOpenAIAPI("chat_completions")
   setTracingDisabled(true)

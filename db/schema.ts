@@ -500,6 +500,8 @@ export const builderSettings = pgTable("builder_settings", {
   cloudhikeBuilderModel: text("cloudhike_builder_model"),
   geminiPlannerModel: text("gemini_planner_model"),
   geminiBuilderModel: text("gemini_builder_model"),
+  openrouterPlannerModel: text("openrouter_planner_model"),
+  openrouterBuilderModel: text("openrouter_builder_model"),
   updatedBy: integer("updated_by").references(() => users.id, { onDelete: "set null" }),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

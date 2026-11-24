@@ -100,10 +100,12 @@ Open [http://localhost:3000](http://localhost:3000).
 | `IMAGEKIT_ENABLED`, `IMAGEKIT_PRIVATE_KEY`, `IMAGEKIT_URL_ENDPOINT` | AI images. Without them, apps use placeholder images |
 | `OPAY_MERCHANT_ID`, `OPAY_PUBLIC_KEY`, `OPAY_SECRET_KEY`, `OPAY_PRO_AMOUNT` | Pro, paid through OPay Checkout |
 | `GOOGLE_AI_API_KEY` | Gemini on Google AI. Required when Gemini is the primary or the fallback |
-| `AI_PRIMARY_PROVIDER` | `cloudhike` or `gemini`. Defaults to `cloudhike` |
-| `AI_FALLBACK_PROVIDER` | `cloudhike`, `gemini`, or `none`. Defaults to the other provider when its key is set |
+| `OPENROUTER_API_KEY` | OpenRouter. Required when OpenRouter is the primary or the fallback |
+| `AI_PRIMARY_PROVIDER` | `cloudhike`, `gemini`, or `openrouter`. Defaults to `cloudhike` |
+| `AI_FALLBACK_PROVIDER` | `cloudhike`, `gemini`, `openrouter`, or `none`. Defaults to the next ready provider when its key is set |
 | `CLOUDHIKE_MODEL`, `CLOUDHIKE_BUILDER_MODEL` | CloudHike planner and builder model ids. Planner defaults to `claude-sonnet-5-5` |
 | `GEMINI_MODEL`, `GEMINI_BUILDER_MODEL` | Gemini planner and builder model ids. Planner defaults to `gemini-3.8-flash` |
+| `OPENROUTER_MODEL`, `OPENROUTER_BUILDER_MODEL` | OpenRouter planner and builder model ids. Default `qwen/qwen4-max` |
 | `DEFAULT_SCREEN_COUNT` | Most screens in a plan unless someone asks for more. Defaults to 3 |
 
 Publishing doesn't need a server-side Expo key, because each person connects their own Expo access token.

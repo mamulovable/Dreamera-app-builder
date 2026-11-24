@@ -1,11 +1,20 @@
 import { NextResponse } from "next/server"
 
 import { adminAuditLog, db } from "@/db"
-import { optionalModel, providerReady, saveBuilderSettings, type AiProviderName } from "@/lib/agent/provider-settings"
+import {
+  AI_PROVIDER_LABELS,
+  isAiProviderName,
+  optionalModel,
+  providerReady,
+  saveBuilderSettings,
+  type AiProviderName,
+} from "@/lib/agent/provider-settings"
 import { AdminActionError, adminActionResponse, requireAdminApi } from "@/lib/admin"
 
-function providerName(value: unknown): AiProviderName | null {
-  return value === "cloudhike" || value === "gemini" ? value : null
+function setupHint(provider: AiProviderName) {
+  if (provider === "cloudhike") return "CloudHike isn't set up. Add AI_BASE_URL and AI_API_KEY."
+  if (provider === "gemini") return "Gemini isn't set up. Add GOOGLE_AI_API_KEY."
+  return "OpenRouter isn't set up. Add OPENROUTER_API_KEY."
 }
 
 export async function POST(request: Request) {
@@ -13,14 +22,12 @@ export async function POST(request: Request) {
   if (auth.failure) return auth.failure
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null
-  const primary = providerName(body?.primary)
-  if (!primary) return NextResponse.json({ error: "Choose CloudHike or Gemini." }, { status: 400 })
+  const primary = isAiProviderName(body?.primary) ? body.primary : null
+  if (!primary) {
+    return NextResponse.json({ error: "Choose CloudHike, Gemini, or OpenRouter." }, { status: 400 })
+  }
   if (!providerReady(primary)) {
-    const message =
-      primary === "cloudhike"
-        ? "CloudHike isn't set up. Add AI_BASE_URL and AI_API_KEY."
-        : "Gemini isn't set up. Add GOOGLE_AI_API_KEY."
-    return NextResponse.json({ error: message }, { status: 400 })
+    return NextResponse.json({ error: setupHint(primary) }, { status: 400 })
   }
 
   try {
@@ -30,6 +37,8 @@ export async function POST(request: Request) {
       cloudhikeBuilderModel: optionalModel(body?.cloudhikeBuilderModel),
       geminiPlannerModel: optionalModel(body?.geminiPlannerModel),
       geminiBuilderModel: optionalModel(body?.geminiBuilderModel),
+      openrouterPlannerModel: optionalModel(body?.openrouterPlannerModel),
+      openrouterBuilderModel: optionalModel(body?.openrouterBuilderModel),
       updatedBy: auth.user.id,
     })
     await db.insert(adminAuditLog).values({
@@ -37,6 +46,7 @@ export async function POST(request: Request) {
       action: "set-builder",
       detail: {
         primary: route.primary,
+        providerLabel: AI_PROVIDER_LABELS[route.primary],
         plannerModel: route.plannerModel,
         builderModel: route.builderModel,
         fallback: route.fallback,

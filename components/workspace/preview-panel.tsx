@@ -94,7 +94,7 @@ export function PreviewPanel({
         {hasApp && (
           <div className="flex items-center gap-1">
             {isMobilePlatform(platform) && <ExpoQrPopover plan={plan} screens={screens} aiEnabled={aiEnabled} projectId={projectId} />}
-            {platform === "web" && (
+            {isWeb && (
               <PreviewAction
                 label="Open preview in a new tab"
                 onClick={() => window.open(`/preview/${projectId}`, "_blank", "noopener,noreferrer")}

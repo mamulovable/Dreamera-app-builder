@@ -8,6 +8,7 @@ import type { ProjectPreview } from "@/hooks/use-project-preview"
 import type { ElementEdits } from "@/lib/preview-protocol"
 import { Button } from "@/components/ui/button"
 import { AppFrame } from "@/components/workspace/app-frame"
+import { HtmlFrame, htmlFiles } from "@/components/workspace/html-frame"
 
 const NO_EDITS: ElementEdits = {}
 
@@ -44,6 +45,8 @@ export function SitePreview({ projectId }: { projectId: string }) {
 
   const name = preview?.project.brand?.name ?? "Site preview"
   const browser = preview?.project.frame === "browser"
+  const html = preview ? htmlFiles(preview.project.files) : null
+  const isHtmlSite = Boolean(html && html.pages.length > 0)
 
   return (
     <div className="flex h-dvh flex-col bg-white">
@@ -64,7 +67,13 @@ export function SitePreview({ projectId }: { projectId: string }) {
         </Button>
       </header>
       <div className="relative min-h-0 flex-1">
-        {preview ? (
+        {preview && isHtmlSite && html ? (
+          <HtmlFrame
+            {...html}
+            title={`${name} preview`}
+            reloadSignal={reloadSignal}
+          />
+        ) : preview ? (
           browser ? (
             <AppFrame
               projectId={projectId}
