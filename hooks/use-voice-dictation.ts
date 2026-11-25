@@ -62,6 +62,22 @@ function readTranscription(value: unknown): string {
   return typeof text === "string" ? text : ""
 }
 
+async function parseSocketMessage(data: unknown): Promise<Record<string, unknown> | null> {
+  try {
+    let text = ""
+    if (typeof data === "string") text = data
+    else if (typeof Blob !== "undefined" && data instanceof Blob) text = await data.text()
+    else if (data instanceof ArrayBuffer) text = new TextDecoder().decode(data)
+    else if (ArrayBuffer.isView(data)) {
+      text = new TextDecoder().decode(data as ArrayBufferView)
+    } else return null
+    if (!text) return null
+    return JSON.parse(text) as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
 /**
  * Realtime voice dictation via Gemini Live (`gemini-3.5-transcribe-live`).
  * Browser opens Gemini with a short-lived token from `/api/transcribe/live`.
@@ -181,63 +197,59 @@ export function useVoiceDictation({
     ws.send(JSON.stringify(payload))
   }, [])
 
-  const startMicStreaming = React.useCallback(async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        channelCount: 1,
-        echoCancellation: true,
-        noiseSuppression: true,
-      },
-    })
-    streamRef.current = stream
+  const attachMicStreaming = React.useCallback(
+    async (stream: MediaStream) => {
+      streamRef.current = stream
 
-    const AudioCtx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-    const audioContext = new AudioCtx()
-    audioContextRef.current = audioContext
-    if (audioContext.state === "suspended") await audioContext.resume()
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+      const audioContext = new AudioCtx()
+      audioContextRef.current = audioContext
+      if (audioContext.state === "suspended") await audioContext.resume()
 
-    const source = audioContext.createMediaStreamSource(stream)
-    sourceRef.current = source
-    const processor = audioContext.createScriptProcessor(4096, 1, 1)
-    processorRef.current = processor
+      const source = audioContext.createMediaStreamSource(stream)
+      sourceRef.current = source
+      const processor = audioContext.createScriptProcessor(4096, 1, 1)
+      processorRef.current = processor
 
-    processor.onaudioprocess = (event) => {
-      if (!setupReadyRef.current || stoppingRef.current) return
-      const input = event.inputBuffer.getChannelData(0)
-      const down = downsample(input, audioContext.sampleRate, TARGET_RATE)
-      if (down.length === 0) return
-      sendJson({
-        realtimeInput: {
-          audio: {
-            mimeType: PCM_MIME,
-            data: encodeBase64(floatTo16BitPcm(down)),
+      processor.onaudioprocess = (event) => {
+        if (!setupReadyRef.current || stoppingRef.current) return
+        const input = event.inputBuffer.getChannelData(0)
+        const down = downsample(input, audioContext.sampleRate, TARGET_RATE)
+        if (down.length === 0) return
+        sendJson({
+          realtimeInput: {
+            audio: {
+              mimeType: PCM_MIME,
+              data: encodeBase64(floatTo16BitPcm(down)),
+            },
           },
-        },
-      })
-    }
+        })
+      }
 
-    const mute = audioContext.createGain()
-    mute.gain.value = 0
-    source.connect(processor)
-    processor.connect(mute)
-    mute.connect(audioContext.destination)
+      const mute = audioContext.createGain()
+      mute.gain.value = 0
+      source.connect(processor)
+      processor.connect(mute)
+      mute.connect(audioContext.destination)
 
-    sendJson({ realtimeInput: { activityStart: {} } })
-    setPhase("recording")
-    setElapsed(0)
-    const startedAt = Date.now()
-    timerRef.current = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - startedAt) / 1000))
-    }, 250)
-    stopAtRef.current = setTimeout(() => {
-      void stopRef.current?.()
-    }, MAX_VOICE_SECONDS * 1000)
-  }, [sendJson])
+      sendJson({ realtimeInput: { activityStart: {} } })
+      setPhase("recording")
+      setElapsed(0)
+      const startedAt = Date.now()
+      timerRef.current = setInterval(() => {
+        setElapsed(Math.floor((Date.now() - startedAt) / 1000))
+      }, 250)
+      stopAtRef.current = setTimeout(() => {
+        void stopRef.current?.()
+      }, MAX_VOICE_SECONDS * 1000)
+    },
+    [sendJson]
+  )
 
   const openLiveSession = React.useCallback(
-    async (session: LiveSessionPayload) => {
+    async (session: LiveSessionPayload, stream: MediaStream) => {
       await new Promise<void>((resolve, reject) => {
         let settled = false
         const fail = (message: string) => {
@@ -252,16 +264,22 @@ export function useVoiceDictation({
         }
 
         const ws = new WebSocket(session.wsUrl)
+        ws.binaryType = "arraybuffer"
         wsRef.current = ws
+        let opened = false
 
         const readyTimeout = setTimeout(() => {
-          fail("Live transcription timed out while connecting. Try again.")
+          fail(
+            opened
+              ? "Gemini Live connected but never finished setup. Try again."
+              : "Couldn't open a Live connection to Gemini from this browser. Try again, or check that WebSockets aren't blocked."
+          )
           try {
             ws.close()
           } catch {
             // ignore
           }
-        }, 12_000)
+        }, 15_000)
 
         const clearReadyTimeout = () => clearTimeout(readyTimeout)
         const failAndClear = (message: string) => {
@@ -274,6 +292,7 @@ export function useVoiceDictation({
         }
 
         ws.onopen = () => {
+          opened = true
           try {
             ws.send(JSON.stringify({ setup: session.setup }))
           } catch {
@@ -294,62 +313,63 @@ export function useVoiceDictation({
         }
 
         ws.onmessage = (event) => {
-          let message: Record<string, unknown>
-          try {
-            message = JSON.parse(typeof event.data === "string" ? event.data : "") as Record<string, unknown>
-          } catch {
-            return
-          }
+          void (async () => {
+            const message = await parseSocketMessage(event.data)
+            if (!message) return
 
-          const apiError = message.error as { message?: unknown } | undefined
-          if (apiError) {
-            const detail = typeof apiError.message === "string" ? apiError.message : ""
-            failAndClear(detail || "Couldn't start live transcription. Try again.")
-            try {
-              ws.close()
-            } catch {
-              // ignore
+            const apiError = message.error as { message?: unknown } | undefined
+            if (apiError) {
+              const detail = typeof apiError.message === "string" ? apiError.message : ""
+              failAndClear(detail || "Couldn't start live transcription. Try again.")
+              try {
+                ws.close()
+              } catch {
+                // ignore
+              }
+              return
             }
-            return
-          }
 
-          if (message.setupComplete !== undefined) {
-            setupReadyRef.current = true
-            void startMicStreaming()
-              .then(() => okAndClear())
-              .catch((cause) => {
+            if (message.setupComplete !== undefined) {
+              // Handshake done — don't let mic wiring count against the connect timeout.
+              clearReadyTimeout()
+              setupReadyRef.current = true
+              try {
+                await attachMicStreaming(stream)
+                okAndClear()
+              } catch (cause) {
                 failAndClear(cause instanceof Error ? cause.message : "Microphone access was blocked.")
-              })
-            return
-          }
-
-          const serverContent = message.serverContent as Record<string, unknown> | undefined
-          if (!serverContent) return
-
-          const interim = readTranscription(serverContent.interimInputTranscription)
-          if (interim) publishLive(finalTextRef.current, interim)
-
-          if (serverContent.inputTranscription !== undefined) {
-            const finalPiece = readTranscription(serverContent.inputTranscription)
-            publishLive(finalPiece, "")
-            if (stoppingRef.current) {
-              if (finalizeTimerRef.current) clearTimeout(finalizeTimerRef.current)
-              finishWithText(finalPiece)
+              }
+              return
             }
-          }
 
-          if (
-            stoppingRef.current &&
-            (serverContent.generationComplete === true || serverContent.turnComplete === true) &&
-            finalTextRef.current
-          ) {
-            if (finalizeTimerRef.current) clearTimeout(finalizeTimerRef.current)
-            finishWithText(finalTextRef.current)
-          }
+            const serverContent = message.serverContent as Record<string, unknown> | undefined
+            if (!serverContent) return
+
+            const interim = readTranscription(serverContent.interimInputTranscription)
+            if (interim) publishLive(finalTextRef.current, interim)
+
+            if (serverContent.inputTranscription !== undefined) {
+              const finalPiece = readTranscription(serverContent.inputTranscription)
+              publishLive(finalPiece, "")
+              if (stoppingRef.current) {
+                if (finalizeTimerRef.current) clearTimeout(finalizeTimerRef.current)
+                finishWithText(finalPiece)
+              }
+            }
+
+            if (
+              stoppingRef.current &&
+              (serverContent.generationComplete === true || serverContent.turnComplete === true) &&
+              finalTextRef.current
+            ) {
+              if (finalizeTimerRef.current) clearTimeout(finalizeTimerRef.current)
+              finishWithText(finalTextRef.current)
+            }
+          })()
         }
       })
     },
-    [finishWithText, publishLive, startMicStreaming]
+    [attachMicStreaming, finishWithText, publishLive]
   )
 
   const start = React.useCallback(async () => {
@@ -370,7 +390,18 @@ export function useVoiceDictation({
     onPartialRef.current?.(null)
     setPhase("connecting")
 
+    let stream: MediaStream | null = null
     try {
+      // Ask for the mic first so the permission prompt doesn't eat the Live connect timeout.
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      })
+      streamRef.current = stream
+
       const response = await fetch("/api/transcribe/live", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -378,6 +409,8 @@ export function useVoiceDictation({
       })
       const data = await response.json().catch(() => null)
       if (response.status === 401) {
+        stream.getTracks().forEach((track) => track.stop())
+        streamRef.current = null
         setPhase("idle")
         onNeedAuth?.()
         return
@@ -390,14 +423,21 @@ export function useVoiceDictation({
       const setup = data?.setup && typeof data.setup === "object" ? (data.setup as Record<string, unknown>) : null
       if (!wsUrl || !setup) throw new Error("Couldn't start live transcription. Try again.")
 
-      await openLiveSession({ wsUrl, setup })
+      await openLiveSession({ wsUrl, setup }, stream)
       onChargedRef.current?.()
     } catch (cause) {
+      stream?.getTracks().forEach((track) => track.stop())
       cleanupSession()
       setPhase("idle")
       setLiveText("")
       onPartialRef.current?.(null)
-      setError(cause instanceof Error ? cause.message : "Couldn't start live transcription. Try again.")
+      const message =
+        cause instanceof Error && /Permission|NotAllowed|Denied/i.test(cause.message)
+          ? "Microphone access was blocked. Allow it in your browser settings to dictate."
+          : cause instanceof Error
+            ? cause.message
+            : "Couldn't start live transcription. Try again."
+      setError(message)
     }
   }, [cleanupSession, disabled, onNeedAuth, openLiveSession, openUpgrade, phase])
 
