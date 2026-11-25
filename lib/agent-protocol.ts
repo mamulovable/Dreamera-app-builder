@@ -4,7 +4,7 @@
 import type { Screen } from "@/db/schema"
 import type { AppBackend, BackendStatus } from "@/lib/backend-protocol"
 import type { UpgradeReason } from "@/lib/plans"
-import type { ProjectStatus } from "@/lib/projects"
+import { isAgentMode, type AgentMode, type ProjectStatus } from "@/lib/projects"
 import type { ThemePackage } from "@/lib/themes"
 
 export const SCREEN_LAYOUTS = ["home", "list", "detail", "profile", "landing", "content", "dashboard"] as const
@@ -175,18 +175,47 @@ export type MessageAsset = {
   size?: number
 }
 
+export type PlanQuestionOption = {
+  id: string
+  label: string
+  description: string
+  recommended?: boolean
+}
+
+export type PlanQuestion = {
+  id: string
+  /** Short category badge, e.g. "App Name", "Core Flow", "Visual Style", "Final Result". */
+  stepLabel: string
+  question: string
+  /** Options (typically 4), with the AI's genuine recommendation marked `recommended: true` first. */
+  options: PlanQuestionOption[]
+}
+
+export type ChangePlan = {
+  title: string
+  summary: string
+  items: string[]
+}
+
+const MODE_BLOCK = /^<agent-mode mode="([^"]*)" \/>\n\n/
 const ASSETS_BLOCK = /^<attached-assets>\n([\s\S]*?)\n<\/attached-assets>\n\n/
 const ELEMENT_BLOCK = /^<selected-element file="([^"]*)" line="(\d+)" label="([^"]*)" screen="([^"]*)">\n[\s\S]*?\n<\/selected-element>\n\n/
+const QUESTIONS_BLOCK = /\n*<plan-questions>\n([\s\S]*?)\n<\/plan-questions>$/
+const CHANGE_PLAN_BLOCK = /\n*<change-plan>\n([\s\S]*?)\n<\/change-plan>$/
 
 const attributeText = (value: string) => value.replace(/["\n]/g, "")
 
-/** Formats a message with optional attached assets and selected element in front of it. */
+/** Formats a message with optional mode, attached assets, and selected element in front of it. */
 export function messageWithAssetsAndElement(
   content: string,
   element?: ElementContext | null,
-  assets?: MessageAsset[] | null
+  assets?: MessageAsset[] | null,
+  mode?: AgentMode | null
 ) {
   let prefix = ""
+  if (mode && mode !== "build") {
+    prefix += `<agent-mode mode="${attributeText(mode)}" />\n\n`
+  }
   if (assets && assets.length > 0) {
     prefix += `<attached-assets>\n${JSON.stringify(assets)}\n</attached-assets>\n\n`
   }
@@ -202,15 +231,23 @@ export function messageWithElement(content: string, element: ElementContext) {
   return messageWithAssetsAndElement(content, element, null)
 }
 
-/** Parses what the person wrote, the element they attached, and any attached assets. */
+/** Parses what the person wrote, the mode they chose, the element they attached, and any attached assets. */
 export function parseMessageContent(content: string): {
   text: string
+  mode: AgentMode
   element: ElementContext | null
   assets: MessageAsset[]
 } {
   let remaining = content
+  let mode: AgentMode = "build"
   let assets: MessageAsset[] = []
   let element: ElementContext | null = null
+
+  const modeMatch = remaining.match(MODE_BLOCK)
+  if (modeMatch) {
+    if (isAgentMode(modeMatch[1])) mode = modeMatch[1]
+    remaining = remaining.slice(modeMatch[0].length)
+  }
 
   const assetsMatch = remaining.match(ASSETS_BLOCK)
   if (assetsMatch) {
@@ -228,7 +265,61 @@ export function parseMessageContent(content: string): {
     remaining = remaining.slice(elementMatch[0].length)
   }
 
-  return { text: remaining, element, assets }
+  return { text: remaining, mode, element, assets }
+}
+
+/** Formats an assistant message with optional interactive planning questions or a change plan card. */
+export function formatAssistantMessage(
+  text: string,
+  extras?: { questions?: PlanQuestion[] | null; changePlan?: ChangePlan | null }
+) {
+  let output = text
+  if (extras?.questions && extras.questions.length > 0) {
+    output += `\n\n<plan-questions>\n${JSON.stringify(extras.questions)}\n</plan-questions>`
+  }
+  if (extras?.changePlan) {
+    output += `\n\n<change-plan>\n${JSON.stringify(extras.changePlan)}\n</change-plan>`
+  }
+  return output
+}
+
+/** Extracts clean assistant text and any attached planning questions or change plan. */
+export function parseAssistantMessage(content: string): {
+  text: string
+  questions: PlanQuestion[] | null
+  changePlan: ChangePlan | null
+} {
+  let remaining = content
+  let questions: PlanQuestion[] | null = null
+  let changePlan: ChangePlan | null = null
+
+  const changeMatch = remaining.match(CHANGE_PLAN_BLOCK)
+  if (changeMatch) {
+    try {
+      const parsed = JSON.parse(changeMatch[1])
+      if (parsed && typeof parsed.title === "string" && Array.isArray(parsed.items)) {
+        changePlan = parsed as ChangePlan
+      }
+    } catch {
+      // ignore
+    }
+    remaining = remaining.slice(0, remaining.length - changeMatch[0].length)
+  }
+
+  const questionsMatch = remaining.match(QUESTIONS_BLOCK)
+  if (questionsMatch) {
+    try {
+      const parsed = JSON.parse(questionsMatch[1])
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        questions = parsed as PlanQuestion[]
+      }
+    } catch {
+      // ignore
+    }
+    remaining = remaining.slice(0, remaining.length - questionsMatch[0].length)
+  }
+
+  return { text: remaining.trim(), questions, changePlan }
 }
 
 /** What the person wrote, and the element they attached to it. */
@@ -241,7 +332,7 @@ export function splitElementMessage(content: string) {
 export type AgentRequest =
   /** Pick up where the project is: answer a waiting prompt or resume a build. */
   | { action: "start" }
-  | { action: "message"; content: string; element?: ElementContext; assets?: MessageAsset[] }
+  | { action: "message"; content: string; mode?: AgentMode; element?: ElementContext; assets?: MessageAsset[] }
   | { action: "confirm" }
   /** Rebuild one screen that failed. Finished screens stay as they are. */
   | { action: "retry"; screenId: string }

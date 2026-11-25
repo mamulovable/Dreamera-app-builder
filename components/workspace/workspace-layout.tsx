@@ -100,6 +100,7 @@ export function WorkspaceLayout({
   }, [agent.busy, agent.status, refreshAccount])
 
   const [aiEnabled, setAiEnabled] = React.useState(project.aiEnabled)
+  const [projectTitle, setProjectTitle] = React.useState(project.title)
   const [aiDialogOpen, setAiDialogOpen] = React.useState(false)
   const [backendDialogOpen, setBackendDialogOpen] = React.useState(backendConnectResult !== null)
   const [connectNotice, setConnectNotice] = React.useState(backendConnectResult)
@@ -133,7 +134,8 @@ export function WorkspaceLayout({
 
   const header = (
     <WorkspaceHeader
-      name={project.title}
+      projectId={project.id}
+      name={agent.plan?.appName || projectTitle}
       status={agent.status}
       platform={project.platform}
       credits={user?.credits ?? credits}
@@ -141,6 +143,11 @@ export function WorkspaceLayout({
       aiEnabled={aiEnabled}
       showAi={!isHtmlWebsite(project.platform)}
       readOnly={readOnly}
+      busy={agent.busy}
+      onRenamed={(name) => {
+        setProjectTitle(name)
+        agent.setAppName(name)
+      }}
       onOpenBackend={() => setBackendDialogOpen(true)}
       onOpenAi={() => setAiDialogOpen(true)}
       onShare={() => setShareDialogOpen(true)}
@@ -162,8 +169,8 @@ export function WorkspaceLayout({
           <ShareDialog projectId={project.id} open={shareDialogOpen} onOpenChange={setShareDialogOpen} />
           <GitHubDialog
             projectId={project.id}
-            projectName={agent.plan?.appName || project.title}
-            defaultRepoName={projectSlug(agent.plan?.appName || project.title)}
+            projectName={agent.plan?.appName || projectTitle}
+            defaultRepoName={projectSlug(agent.plan?.appName || projectTitle)}
             open={githubDialogOpen}
             onOpenChange={(open) => {
               setGithubDialogOpen(open)

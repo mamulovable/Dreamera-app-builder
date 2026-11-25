@@ -5,12 +5,17 @@ import { z } from "zod"
 import { db, messages, projects, screens, type Project, type Screen } from "@/db"
 import {
   APP_NAVIGATIONS,
+  componentFilePath,
+  formatAssistantMessage,
   MAX_TABS,
   MIN_TABS,
-  SCREEN_LAYOUTS,
+  parseAssistantMessage,
   parseMessageContent,
+  SCREEN_LAYOUTS,
   type AppPlan,
+  type ChangePlan,
   type ChatMessage,
+  type PlanQuestion,
 } from "@/lib/agent-protocol"
 import { mergePlan, planAppChanges, slugify, type AppChanges } from "@/lib/agent/changes"
 import { withBuilderCall } from "@/lib/agent/call-scope"
@@ -22,16 +27,20 @@ import { BACKEND_SERVICES } from "@/lib/backend-protocol"
 import { screenLimitMessage } from "@/lib/billing/credits"
 import { getBackendStatus, setUpBackend } from "@/lib/cloudhike/backend"
 import { buildCost, PLANS } from "@/lib/plans"
-import { isHtmlWebsite } from "@/lib/projects"
+import { isHtmlWebsite, MAX_PROJECT_NAME_LENGTH } from "@/lib/projects"
 import { HEX_COLOR, themeFromDesign } from "@/lib/themes"
 
-type PlannerContext = PlannerState & {
+type PlannerContext = Omit<PlannerState, "rows"> & {
   project: Project
   projectId: string
   run: ProjectRun
-  rows: Pick<Screen, "slug" | "name" | "code">[]
+  rows: Pick<Screen, "slug" | "name" | "filePath" | "code">[]
   /** The plan proposed during this turn, saved with the reply. */
   proposedPlan: AppPlan | null
+  /** Interactive planning questions asked during this turn, saved with the reply. */
+  proposedQuestions: PlanQuestion[] | null
+  /** Change plan proposed on a built project in Plan mode, saved with the reply. */
+  proposedChangePlan: ChangePlan | null
   confirmed: boolean
   /** The changes to a built app asked for during this turn, made right after the reply. */
   changes: AppChanges | null
@@ -215,7 +224,10 @@ const proposePlan = tool<typeof planSchema, PlannerContext>({
     const plan = normalizePlan(input, PLANS[ctx.account.plan].maxScreens)
     if (typeof plan === "string") return `Plan not saved: ${plan} Fix it and call propose_plan again.`
 
-    await db.update(projects).set({ plan, status: "planning" }).where(eq(projects.id, ctx.projectId))
+    await db
+      .update(projects)
+      .set({ plan, title: plan.appName.slice(0, MAX_PROJECT_NAME_LENGTH), status: "planning" })
+      .where(eq(projects.id, ctx.projectId))
     if (ctx.status !== "planning") ctx.run.emit({ type: "project-status", status: "planning" })
     ctx.plan = plan
     ctx.status = "planning"
@@ -327,12 +339,147 @@ const setupBackend = tool<typeof backendSchema, PlannerContext>({
   },
 })
 
-const plannerAgent = new Agent<PlannerContext>({
-  name: "AppForge Planner",
-  model: PLANNER_MODEL,
-  instructions: (runContext) => plannerInstructions(runContext.context),
-  tools: [proposePlan, confirmPlan, updateApp, setTheme, setupBackend],
+const planQuestionOptionSchema = z.object({
+  id: z.string().describe("Short kebab-case option id, e.g. 'opt-1'"),
+  label: z.string().describe("Short, scannable option title (2 to 7 words)"),
+  description: z.string().describe("One concise sentence explaining this choice — or why you recommend it when recommended is true"),
+  recommended: z.boolean().describe("True ONLY for the single option you genuinely recommend most for this prompt"),
 })
+
+const planQuestionSchema = z.object({
+  id: z.string().describe("Unique kebab-case question id, e.g. 'app-name'"),
+  stepLabel: z.string().describe("Short step badge, e.g. 'App Name', 'Core Flow', 'Layout', 'Visual Style', 'Final Result'"),
+  question: z.string().describe("Clear, concise question text for the person"),
+  options: z.array(planQuestionOptionSchema).describe("Exactly 4 options, with the recommended option first"),
+})
+
+const askPlanQuestionsSchema = z.object({
+  questions: z
+    .array(planQuestionSchema)
+    .describe("Ordered planning questions walking from the app/site name to the final result, strictly within the person's prompt"),
+})
+
+const changePlanSchema = z.object({
+  title: z.string().describe("Short title for the planned change"),
+  summary: z.string().describe("One sentence summarizing what will change"),
+  items: z.array(z.string()).describe("2 to 5 concrete bullet items describing the exact changes to build"),
+})
+
+const readFileSchema = z.object({
+  path: z.string().describe("Project file path to inspect, e.g. 'app/(tabs)/index.tsx', 'components/HabitCard.tsx', or 'index.html'"),
+})
+
+const askPlanQuestions = tool<typeof askPlanQuestionsSchema, PlannerContext>({
+  name: "ask_plan_questions",
+  description:
+    "Present interactive 4-option multiple-choice planning questions (with your top recommendation highlighted first) so the person can plan step by step before building.",
+  parameters: askPlanQuestionsSchema,
+  async execute({ questions }, runContext) {
+    const ctx = runContext!.context
+    if (questions.length < 1 || questions.length > 6) {
+      return `Questions not shown: pass between 1 and 6 questions (got ${questions.length}). Call ask_plan_questions again.`
+    }
+    for (const q of questions) {
+      if (q.options.length < 3) {
+        return `Questions not shown: "${q.stepLabel}" only has ${q.options.length} options. Provide 4 options per question with your top recommendation marked recommended: true.`
+      }
+    }
+    const normalized: PlanQuestion[] = questions.map((q, qi) => {
+      const sliced = q.options.slice(0, 4)
+      const recIndex = Math.max(
+        sliced.findIndex((o) => o.recommended),
+        0
+      )
+      const ordered = [
+        sliced[recIndex],
+        ...sliced.filter((_, idx) => idx !== recIndex),
+      ].map((opt, oi) => ({
+        id: slugify(opt.id || `option-${oi + 1}`) || `opt-${oi + 1}`,
+        label: opt.label.trim(),
+        description: opt.description.trim(),
+        recommended: oi === 0,
+      }))
+      return {
+        id: slugify(q.id || q.stepLabel || `q-${qi + 1}`) || `q-${qi + 1}`,
+        stepLabel: q.stepLabel.trim() || `Step ${qi + 1}`,
+        question: q.question.trim(),
+        options: ordered,
+      }
+    })
+    ctx.proposedQuestions = normalized
+    return `Questions displayed as an interactive ${normalized.length}-step card in the chat. Write only 1 or 2 short introductory sentences and do NOT list the questions or options in plain text.`
+  },
+})
+
+const proposeChangePlan = tool<typeof changePlanSchema, PlannerContext>({
+  name: "propose_change_plan",
+  description:
+    "Show a structured change plan card for an already-built project in Plan mode, with a 'Confirm & build changes' button.",
+  parameters: changePlanSchema,
+  async execute(input, runContext) {
+    const ctx = runContext!.context
+    const items = input.items.map((item) => item.trim()).filter(Boolean)
+    if (!input.title.trim() || items.length === 0) {
+      return "Change plan not saved: provide a title and at least one concrete change item."
+    }
+    ctx.proposedChangePlan = {
+      title: input.title.trim(),
+      summary: input.summary.trim(),
+      items: items.slice(0, 8),
+    }
+    return `Change plan saved and shown as a card with a "Confirm & build changes" button. Write 1 or 2 short sentences inviting the person to confirm or request adjustments.`
+  },
+})
+
+const readProjectFile = tool<typeof readFileSchema, PlannerContext>({
+  name: "read_project_file",
+  description:
+    "Read the current source code of a built screen, page, shared component, or stylesheet in this project so you can answer questions accurately or suggest tailored edits.",
+  parameters: readFileSchema,
+  async execute({ path }, runContext) {
+    const ctx = runContext!.context
+    const target = path.trim()
+    const screenRow = ctx.rows.find(
+      (r) => r.code && (r.filePath === target || r.slug === target || r.name.toLowerCase() === target.toLowerCase())
+    )
+    if (screenRow?.code) return `# ${screenRow.filePath} (${screenRow.name})\n${screenRow.code}`
+
+    const component = ctx.plan?.components?.find(
+      (c) => componentFilePath(c.name) === target || c.name === target
+    )
+    if (component?.code) return `# ${componentFilePath(component.name)}\n${component.code}`
+
+    if (target === "site.css" && ctx.plan?.site?.css) return `# site.css\n${ctx.plan.site.css}`
+    if (target === "site.js" && ctx.plan?.site?.js) return `# site.js\n${ctx.plan.site.js}`
+
+    const available = [
+      ...ctx.rows.filter((r) => r.code).map((r) => r.filePath),
+      ...(ctx.plan?.components?.map((c) => componentFilePath(c.name)) ?? []),
+      ...(ctx.plan?.site?.css ? ["site.css"] : []),
+      ...(ctx.plan?.site?.js ? ["site.js"] : []),
+    ]
+    return available.length > 0
+      ? `File "${target}" not found. Available files: ${available.join(", ")}`
+      : "No files have been built in this project yet."
+  },
+})
+
+function toolsForTurn(ctx: PlannerContext) {
+  if (ctx.mode === "chat") {
+    const hasFiles = ctx.builtScreens > 0 || Boolean(ctx.plan?.components?.length) || Boolean(ctx.plan?.site?.css)
+    return hasFiles ? [readProjectFile] : []
+  }
+  if (ctx.mode === "plan") {
+    if (ctx.builtScreens === 0) {
+      if (!ctx.plan && !ctx.justAnsweredQuestions) {
+        return [askPlanQuestions]
+      }
+      return ctx.plan ? [proposePlan, askPlanQuestions, confirmPlan] : [proposePlan, askPlanQuestions]
+    }
+    return [askPlanQuestions, proposeChangePlan, readProjectFile]
+  }
+  return [proposePlan, confirmPlan, updateApp, setTheme, setupBackend]
+}
 
 const TOOL_STATUS: Record<string, string> = {
   propose_plan: "Drafting the screen plan…",
@@ -340,6 +487,9 @@ const TOOL_STATUS: Record<string, string> = {
   update_app: "Working out the changes…",
   set_theme: "Changing the theme…",
   setup_backend: "Setting up your backend…",
+  ask_plan_questions: "Preparing planning questions…",
+  propose_change_plan: "Outlining your change plan…",
+  read_project_file: "Inspecting project files…",
 }
 
 function toInputItems(thread: Pick<ChatMessage, "role" | "content">[]): AgentInputItem[] {
@@ -395,11 +545,20 @@ async function planTurn(
     .orderBy(messages.createdAt)
 
   const rows = await db
-    .select({ slug: screens.slug, name: screens.name, code: screens.code })
+    .select({ slug: screens.slug, name: screens.name, filePath: screens.filePath, code: screens.code })
     .from(screens)
     .where(eq(screens.projectId, project.id))
 
+  const lastUser = thread.findLast((m) => m.role === "user")
+  const activeMode = lastUser ? parseMessageContent(lastUser.content).mode : "build"
+  const prevMsg = thread.at(-2)
+  const justAnsweredQuestions =
+    prevMsg?.role === "assistant" && parseAssistantMessage(prevMsg.content).questions !== null
+
   const context: PlannerContext = {
+    mode: activeMode,
+    originalPrompt: project.prompt,
+    justAnsweredQuestions,
     project,
     backend: await getBackendStatus(project.id, project.userId),
     ai: { enabled: project.aiEnabled, ...aiProvidersConfigured() },
@@ -413,12 +572,31 @@ async function planTurn(
     assetNames,
     account,
     proposedPlan: null,
+    proposedQuestions: null,
+    proposedChangePlan: null,
     confirmed: false,
     changes: null,
   }
 
-  projectRun.emit({ type: "status", label: thread.length > 1 ? "Reading your message…" : "Reading your request…" })
-  const result = await run(plannerAgent, toInputItems(thread), { stream: true, context })
+  const turnAgent = new Agent<PlannerContext>({
+    name: "AppForge Planner",
+    model: PLANNER_MODEL,
+    instructions: (runContext) => plannerInstructions(runContext.context),
+    tools: toolsForTurn(context),
+  })
+
+  projectRun.emit({
+    type: "status",
+    label:
+      activeMode === "chat"
+        ? "Thinking about your project…"
+        : activeMode === "plan" && !justAnsweredQuestions
+          ? "Planning your steps…"
+          : thread.length > 1
+            ? "Reading your message…"
+            : "Reading your request…",
+  })
+  const result = await run(turnAgent, toInputItems(thread), { stream: true, context })
 
   let text = ""
   let responseHasText = false
@@ -458,7 +636,7 @@ async function planTurn(
   await result.completed
 
   projectRun.emit({ type: "status", label: null })
-  const content =
+  const plainText =
     text.trim() ||
     (context.confirmed
       ? "Starting the build now."
@@ -466,7 +644,16 @@ async function planTurn(
         ? "On it! I'm making those changes now."
         : context.proposedPlan
           ? "Here's the plan. Confirm it to start building, or tell me what to change."
-          : "Sorry, I couldn't come up with a reply. Could you say that again?")
+          : context.proposedQuestions
+            ? "Let's plan this step by step — pick your preferences below to shape the plan."
+            : context.proposedChangePlan
+              ? "Here's the change plan based on your choices. Confirm below whenever you're ready to build."
+              : "Sorry, I couldn't come up with a reply. Could you say that again?")
+
+  const content = formatAssistantMessage(plainText, {
+    questions: context.proposedQuestions,
+    changePlan: context.proposedChangePlan,
+  })
 
   const [saved] = await db
     .insert(messages)

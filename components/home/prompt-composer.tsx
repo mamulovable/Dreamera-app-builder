@@ -6,9 +6,12 @@ import {
   ArrowUpIcon,
   CheckIcon,
   ChevronDownIcon,
+  CompassIcon,
   FileTextIcon,
   GlobeIcon,
+  HammerIcon,
   ImageIcon,
+  MessageCircleIcon,
   PaperclipIcon,
   SmartphoneIcon,
   UploadCloudIcon,
@@ -20,7 +23,11 @@ import { isUpgradeReason } from "@/lib/plans"
 import { QUICK_PROMPTS } from "@/lib/home-data"
 import {
   ACCEPTED_ASSET_TYPES,
+  AGENT_MODE_DESCRIPTIONS,
+  AGENT_MODE_LABELS,
+  AGENT_MODES,
   isAcceptedAsset,
+  isAgentMode,
   MAX_ASSET_SIZE,
   MAX_ASSETS,
   MAX_PROMPT_LENGTH,
@@ -28,6 +35,7 @@ import {
   PLATFORM_DESCRIPTIONS,
   PLATFORM_LABELS,
   PROJECT_PLATFORMS,
+  type AgentMode,
   type ProjectPlatform,
 } from "@/lib/projects"
 import { PENDING_PROMPT_KEY } from "@/lib/social-auth"
@@ -52,6 +60,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { VoiceDictationControls } from "@/components/ui/voice-dictation-controls"
 import { useUpgradeDialog } from "@/components/billing/upgrade-dialog"
 import { useSignInDialog } from "@/components/home/sign-in-dialog"
 
@@ -114,7 +123,7 @@ function postProject(
 }
 
 export function PromptComposer() {
-  const { user, isPending: isSessionPending } = useAuth()
+  const { user, isPending: isSessionPending, refresh: refreshAccount } = useAuth()
   const { openSignIn } = useSignInDialog()
   const openUpgrade = useUpgradeDialog()
   const router = useRouter()
@@ -122,6 +131,7 @@ export function PromptComposer() {
   const [prompt, setPrompt] = React.useState("")
   const [files, setFiles] = React.useState<PromptFile[]>([])
   const [platform, setPlatform] = React.useState<ProjectPlatform>(PROJECT_PLATFORMS[0])
+  const [mode, setMode] = React.useState<AgentMode>("build")
   const [error, setError] = React.useState<string | null>(null)
   const [isDragging, setIsDragging] = React.useState(false)
   const [previewFile, setPreviewFile] = React.useState<PromptFile | null>(null)
@@ -189,10 +199,10 @@ export function PromptComposer() {
   }
 
   // Latest composer state, so a submit resumed after sign-in sees current values.
-  const draftRef = React.useRef({ prompt, platform, files })
+  const draftRef = React.useRef({ prompt, platform, mode, files })
   React.useEffect(() => {
-    draftRef.current = { prompt, platform, files }
-  }, [prompt, platform, files])
+    draftRef.current = { prompt, platform, mode, files }
+  }, [prompt, platform, mode, files])
 
   // Guards against a double submit before the status state has re-rendered.
   const submittingRef = React.useRef(false)
@@ -205,6 +215,7 @@ export function PromptComposer() {
     const body = new FormData()
     body.append("prompt", draft.prompt.trim())
     body.append("platform", draft.platform)
+    body.append("mode", draft.mode)
     draft.files.forEach((f) => body.append("files", f.file))
 
     submittingRef.current = true
@@ -254,11 +265,12 @@ export function PromptComposer() {
     if (!saved) return
     sessionStorage.removeItem(PENDING_PROMPT_KEY)
     try {
-      const draft = JSON.parse(saved) as { prompt?: string; platform?: string }
+      const draft = JSON.parse(saved) as { prompt?: string; platform?: string; mode?: string }
       if (!draft.prompt) return
       setPrompt(draft.prompt)
       const savedPlatform = PROJECT_PLATFORMS.find((p) => p === draft.platform)
       if (savedPlatform) setPlatform(savedPlatform)
+      if (isAgentMode(draft.mode)) setMode(draft.mode)
       setResumeAfterAuth(true)
     } catch {
       // Ignore a malformed draft.
@@ -274,8 +286,8 @@ export function PromptComposer() {
   }, [resumeAfterAuth, isSessionPending, user])
 
   function parkDraft() {
-    const { prompt, platform } = draftRef.current
-    sessionStorage.setItem(PENDING_PROMPT_KEY, JSON.stringify({ prompt, platform }))
+    const { prompt, platform, mode } = draftRef.current
+    sessionStorage.setItem(PENDING_PROMPT_KEY, JSON.stringify({ prompt, platform, mode }))
   }
 
   function handleSubmit(event?: React.FormEvent) {
@@ -319,6 +331,22 @@ export function PromptComposer() {
       if (!el) return
       el.focus()
       el.setSelectionRange(text.length, text.length)
+    })
+  }
+
+  function applyTranscript(text: string) {
+    if (isSubmitting) return
+    setPrompt((prev) => {
+      const trimmed = prev.trim()
+      const next = trimmed ? `${trimmed} ${text}` : text
+      return next.slice(0, MAX_PROMPT_LENGTH)
+    })
+    requestAnimationFrame(() => {
+      const el = textareaRef.current
+      if (!el) return
+      el.focus()
+      const end = el.value.length
+      el.setSelectionRange(end, end)
     })
   }
 
@@ -395,12 +423,18 @@ export function PromptComposer() {
               readOnly={isSubmitting}
               maxLength={MAX_PROMPT_LENGTH}
               rows={3}
-              placeholder="Describe your dream app… e.g. A marketplace where local makers sell what they create"
+              placeholder={
+                mode === "plan"
+                  ? "Describe what you want to build — we'll plan step by step from app name to final result…"
+                  : mode === "chat"
+                    ? "Chat about your app idea — explore features, ask questions, or brainstorm…"
+                    : "Describe your dream app… e.g. A marketplace where local makers sell what they create"
+              }
               className="field-sizing-content block max-h-64 min-h-24 w-full resize-none bg-transparent px-3 pt-3 pb-2 text-base leading-relaxed outline-none placeholder:text-muted-foreground/70"
             />
 
             <div className="flex items-center justify-between gap-2 px-1 pb-0.5">
-              <div className="flex items-center gap-1">
+              <div className="flex min-w-0 flex-wrap items-center gap-0.5">
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -415,13 +449,13 @@ export function PromptComposer() {
                 <Button
                   type="button"
                   variant="ghost"
-                  size="lg"
-                  className="h-9 rounded-full bg-muted/60 px-3.5 text-muted-foreground hover:bg-brand/10 hover:text-brand-dark"
+                  size="icon-lg"
+                  aria-label="Attach file"
+                  className="size-9 rounded-full text-muted-foreground hover:bg-muted/60 hover:text-brand-dark"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={files.length >= MAX_ASSETS || isSubmitting}
                 >
-                  <PaperclipIcon />
-                  <span className="hidden sm:inline">Attach</span>
+                  <PaperclipIcon className="size-4" />
                 </Button>
 
                 <DropdownMenu>
@@ -432,13 +466,17 @@ export function PromptComposer() {
                         type="button"
                         variant="ghost"
                         size="lg"
-                        className="h-9 rounded-full bg-muted/60 px-3.5 text-muted-foreground hover:bg-brand/10 hover:text-brand-dark"
+                        className="h-9 gap-1.5 rounded-full px-2.5 text-muted-foreground hover:bg-muted/60 hover:text-brand-dark"
                       />
                     }
                   >
-                    {isWebsitePlatform(platform) ? <GlobeIcon /> : <SmartphoneIcon />}
-                    <span className="hidden sm:inline">{PLATFORM_LABELS[platform]}</span>
-                    <ChevronDownIcon className="size-3.5 opacity-60" />
+                    {isWebsitePlatform(platform) ? (
+                      <GlobeIcon className="size-4" />
+                    ) : (
+                      <SmartphoneIcon className="size-4" />
+                    )}
+                    <span className="hidden max-w-28 truncate text-sm sm:inline">{PLATFORM_LABELS[platform]}</span>
+                    <ChevronDownIcon className="size-3 opacity-50" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent className="w-64 rounded-2xl">
                     {PROJECT_PLATFORMS.map((option) => (
@@ -461,24 +499,89 @@ export function PromptComposer() {
                     ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    disabled={isSubmitting}
+                    render={
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="lg"
+                        className="h-9 gap-1.5 rounded-full px-2.5 text-muted-foreground hover:bg-muted/60 hover:text-brand-dark"
+                      />
+                    }
+                  >
+                    {mode === "plan" ? (
+                      <CompassIcon className="size-4" />
+                    ) : mode === "chat" ? (
+                      <MessageCircleIcon className="size-4" />
+                    ) : (
+                      <HammerIcon className="size-4" />
+                    )}
+                    <span className="text-sm">{AGENT_MODE_LABELS[mode]}</span>
+                    <ChevronDownIcon className="size-3 opacity-50" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-64 rounded-2xl">
+                    {AGENT_MODES.map((option) => {
+                      const Icon =
+                        option === "plan"
+                          ? CompassIcon
+                          : option === "chat"
+                            ? MessageCircleIcon
+                            : HammerIcon
+                      return (
+                        <DropdownMenuItem
+                          key={option}
+                          className="items-start rounded-xl py-2"
+                          onClick={() => setMode(option)}
+                        >
+                          <Icon className="mt-0.5 size-4" />
+                          <span className="flex min-w-0 flex-col">
+                            <span>{AGENT_MODE_LABELS[option]}</span>
+                            <span className="text-xs font-normal text-muted-foreground">
+                              {AGENT_MODE_DESCRIPTIONS[option]}
+                            </span>
+                          </span>
+                          {option === mode && <CheckIcon className="ml-auto text-brand" />}
+                        </DropdownMenuItem>
+                      )
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <VoiceDictationControls
+                  disabled={isSubmitting || isSessionPending}
+                  onTranscript={applyTranscript}
+                  onCharged={() => void refreshAccount()}
+                  onNeedAuth={() =>
+                    openSignIn("sign-in", {
+                      reason: "Sign in to dictate your app idea with your voice.",
+                    })
+                  }
+                />
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="ml-auto flex shrink-0 items-center gap-2">
                 {isSubmitting ? (
                   <span role="status" className="text-xs font-medium text-brand-dark">
                     {statusText(submitStatus, files.length)}
                   </span>
-                ) : (
-                  <span className="hidden text-xs text-muted-foreground sm:inline">
-                    <kbd className="rounded-md border border-border bg-muted/60 px-1.5 py-0.5 font-sans text-[10px]">Shift + Enter</kbd> for new line
-                  </span>
-                )}
+                ) : null}
                 <Button
                   type="submit"
                   size="icon-lg"
                   disabled={!canSubmit || isSessionPending}
-                  aria-label={isSubmitting ? "Creating project" : "Generate app"}
-                  className="size-11 rounded-full bg-brand text-white shadow-lg shadow-brand/40 transition-transform hover:scale-105 hover:opacity-95 disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100 disabled:shadow-none"
+                  aria-label={
+                    isSubmitting
+                      ? "Creating project"
+                      : mode === "plan"
+                        ? "Start planning"
+                        : mode === "chat"
+                          ? "Start chat"
+                          : "Generate app"
+                  }
+                  className="size-10 rounded-full bg-brand text-white shadow-lg shadow-brand/40 transition-transform hover:scale-105 hover:opacity-95 disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100 disabled:shadow-none"
                 >
                   {isSubmitting ? <Spinner className="size-5" /> : <ArrowUpIcon className="size-5" />}
                 </Button>

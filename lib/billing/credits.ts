@@ -44,7 +44,7 @@ export function assertCanUseAgent(credits: number) {
 export async function spendCredits(
   userId: number,
   amount: number,
-  entry: { reason: CreditReason; projectId: string; reference: string }
+  entry: { reason: CreditReason; projectId?: string | null; reference: string }
 ) {
   await db.transaction(async (tx) => {
     // The row is checked and changed in one statement, so spending at once from two tabs can't go below zero.
@@ -58,7 +58,9 @@ export async function spendCredits(
       .returning({ credits: users.credits, monthlyCredits: users.monthlyCredits })
     if (!user) throw notEnoughCredits(amount)
     await tx.insert(creditTransactions).values({
-      ...entry,
+      reason: entry.reason,
+      projectId: entry.projectId ?? null,
+      reference: entry.reference,
       userId,
       amount: -amount,
       balanceAfter: user.credits + user.monthlyCredits,
@@ -70,13 +72,20 @@ export async function spendCredits(
  * Gives credits back once per `reference`, as credits that don't expire, since
  * the month they came from may be over by now. Returns whether it did.
  */
-export async function refundCredits(userId: number, amount: number, entry: { projectId: string; reference: string }) {
+export async function refundCredits(userId: number, amount: number, entry: { projectId?: string | null; reference: string }) {
   if (amount <= 0) return false
   return db.transaction(async (tx) => {
     const [user] = await tx.select().from(users).where(eq(users.id, userId)).for("update")
     const saved = await tx
       .insert(creditTransactions)
-      .values({ ...entry, userId, amount, balanceAfter: user.credits + user.monthlyCredits + amount, reason: "refund" })
+      .values({
+        projectId: entry.projectId ?? null,
+        reference: entry.reference,
+        userId,
+        amount,
+        balanceAfter: user.credits + user.monthlyCredits + amount,
+        reason: "refund",
+      })
       .onConflictDoNothing()
       .returning({ id: creditTransactions.id })
     if (saved.length === 0) return false

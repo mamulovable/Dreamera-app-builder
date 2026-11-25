@@ -5,10 +5,15 @@ import {
   AlertCircleIcon,
   ArrowUpIcon,
   BrainIcon,
+  CheckIcon,
+  ChevronDownIcon,
   ChevronRightIcon,
+  CompassIcon,
   EyeIcon,
   FileTextIcon,
+  HammerIcon,
   ImageIcon,
+  MessageCircleIcon,
   MessageSquarePlusIcon,
   PaperclipIcon,
   RotateCwIcon,
@@ -20,9 +25,27 @@ import {
 
 import type { InlineEditor } from "@/hooks/use-inline-editor"
 import type { useProjectAgent } from "@/hooks/use-project-agent"
-import { parseMessageContent, splitElementMessage, type ChatMessage, type MessageAsset } from "@/lib/agent-protocol"
+import {
+  parseAssistantMessage,
+  parseMessageContent,
+  type ChatMessage,
+  type MessageAsset,
+} from "@/lib/agent-protocol"
+import { useAuth } from "@/lib/auth-client"
 import { ELEMENT_LABELS } from "@/lib/preview-protocol"
-import { ACCEPTED_ASSET_TYPES, isAcceptedAsset, isHtmlWebsite, MAX_ASSET_SIZE, MAX_ASSETS, MAX_PROMPT_LENGTH, type ProjectPlatform } from "@/lib/projects"
+import {
+  ACCEPTED_ASSET_TYPES,
+  AGENT_MODE_DESCRIPTIONS,
+  AGENT_MODE_LABELS,
+  AGENT_MODES,
+  isAcceptedAsset,
+  isHtmlWebsite,
+  MAX_ASSET_SIZE,
+  MAX_ASSETS,
+  MAX_PROMPT_LENGTH,
+  type AgentMode,
+  type ProjectPlatform,
+} from "@/lib/projects"
 import { cn } from "@/lib/utils"
 import {
   AlertDialog,
@@ -37,9 +60,17 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Spinner } from "@/components/ui/spinner"
+import { VoiceDictationControls } from "@/components/ui/voice-dictation-controls"
 import { BuildProgress } from "@/components/workspace/build-progress"
 import { PlanCard, type PlanCardState } from "@/components/workspace/plan-card"
+import { ChangePlanCard, PlanQuestionsCard } from "@/components/workspace/plan-questions-card"
 
 type Agent = ReturnType<typeof useProjectAgent>
 
@@ -85,9 +116,21 @@ export function ChatPanel({
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const following = React.useRef(true)
   const { messages, status, busy, activity, streamingText, reasoning, error, screens, send, startNewSession, sessionRestarted } = agent
+  const { refresh: refreshAccount } = useAuth()
+  const [mode, setMode] = React.useState<AgentMode>(() => {
+    const lastUser = messages.findLast((m) => m.role === "user")
+    return lastUser ? parseMessageContent(lastUser.content).mode : "build"
+  })
 
   const firstUserId = sessionRestarted ? undefined : messages.find((m) => m.role === "user")?.id
   const latestPlanId = messages.findLast((m) => m.plan)?.id
+  const latestQuestionsId = messages.findLast(
+    (m) => m.role === "assistant" && parseAssistantMessage(m.content).questions !== null
+  )?.id
+  const latestChangePlanId = messages.findLast(
+    (m) => m.role === "assistant" && parseAssistantMessage(m.content).changePlan !== null
+  )?.id
+  const hasBuiltScreens = screens.some((s) => Boolean(s.code))
   // A new session archives the message that held the plan's card, and the plan can still be waiting for confirmation.
   const waitingPlan = (status === "planning" || status === "failed") && !latestPlanId ? agent.plan : null
   const canRetry = !editor.readOnly && (status === "building" || messages.at(-1)?.role === "user")
@@ -97,6 +140,20 @@ export function ChatPanel({
     : () => {
         following.current = true
         void send({ action: "confirm" })
+      }
+  const submitPlanAnswers = editor.readOnly
+    ? undefined
+    : (formattedMessage: string) => {
+        following.current = true
+        setMode("plan")
+        void editor.sendMessage(formattedMessage, undefined, "plan")
+      }
+  const confirmChangePlan = editor.readOnly
+    ? undefined
+    : () => {
+        following.current = true
+        setMode("build")
+        void editor.sendMessage("Approved — please build the planned changes now.", undefined, "build")
       }
   const showBuild = screens.length > 0 && status === "building"
   const inputLocked = busy || status === "building" || isUploading
@@ -125,6 +182,11 @@ export function ChatPanel({
     if (message.id !== latestPlanId) return "superseded"
     if (status !== "planning" && status !== "failed") return "confirmed"
     return "pending"
+  }
+
+  function hasLaterUserMessage(messageId: string) {
+    const idx = messages.findIndex((m) => m.id === messageId)
+    return idx !== -1 && messages.slice(idx + 1).some((m) => m.role === "user")
   }
 
   function addFiles(incoming: FileList | File[]) {
@@ -238,7 +300,7 @@ export function ChatPanel({
     setFiles([])
 
     // Put the text and files back if the agent didn't take it.
-    if (!(await editor.sendMessage(promptText, uploadedAssets).catch(() => false))) {
+    if (!(await editor.sendMessage(promptText, uploadedAssets, undefined, mode).catch(() => false))) {
       setDraft((d) => d || promptText)
       setFiles(currentFiles)
     }
@@ -324,7 +386,10 @@ export function ChatPanel({
             </li>
           )}
 
-          {messages.map((message) => (
+          {messages.map((message) => {
+            const parsedAssistant =
+              message.role === "assistant" ? parseAssistantMessage(message.content) : null
+            return (
             <li
               key={message.id}
               className={cn("flex flex-wrap gap-2.5", message.role === "user" && "justify-end")}
@@ -335,7 +400,34 @@ export function ChatPanel({
               ) : (
                 <div className="min-w-0 flex-1 space-y-3 pt-1">
                   <span className="sr-only">Agent: </span>
-                  <MessageText text={message.content} />
+                  {parsedAssistant?.text && <MessageText text={parsedAssistant.text} />}
+                  {parsedAssistant?.questions && (
+                    <PlanQuestionsCard
+                      questions={parsedAssistant.questions}
+                      state={
+                        message.id === latestQuestionsId && !hasLaterUserMessage(message.id)
+                          ? "pending"
+                          : "answered"
+                      }
+                      disabled={busy}
+                      isBuiltProject={hasBuiltScreens}
+                      onSubmitAnswers={submitPlanAnswers}
+                    />
+                  )}
+                  {parsedAssistant?.changePlan && (
+                    <ChangePlanCard
+                      changePlan={parsedAssistant.changePlan}
+                      state={
+                        message.id === latestChangePlanId &&
+                        !hasLaterUserMessage(message.id) &&
+                        status !== "building"
+                          ? "pending"
+                          : "confirmed"
+                      }
+                      disabled={busy}
+                      onConfirm={confirmChangePlan}
+                    />
+                  )}
                   {message.plan && (
                     <PlanCard
                       screens={screens}
@@ -373,7 +465,8 @@ export function ChatPanel({
                 </ul>
               )}
             </li>
-          ))}
+            )
+          })}
 
           {(busy || streamingText || reasoning || showBuild) && (
             <li className="flex gap-2.5">
@@ -524,13 +617,19 @@ export function ChatPanel({
                   ? htmlSite
                     ? "Building your pages…"
                     : "Building your screens…"
-                  : attachment
-                    ? `Ask for a change to this ${attachmentLabel?.toLowerCase()}…`
-                    : agent.plan
-                    ? htmlSite
-                      ? "Ask for changes… e.g. Add a contact page"
-                      : "Ask for changes… e.g. Add a settings screen"
-                    : "Message the agent…"
+                  : mode === "chat"
+                    ? "Chat with your project — ask questions, get edit ideas, or explore features…"
+                    : mode === "plan"
+                      ? hasBuiltScreens
+                        ? "Describe an edit or feature to plan step by step…"
+                        : "Describe what to plan step by step…"
+                      : attachment
+                        ? `Ask for a change to this ${attachmentLabel?.toLowerCase()}…`
+                        : agent.plan
+                          ? htmlSite
+                            ? "Ask for changes… e.g. Add a contact page"
+                            : "Ask for changes… e.g. Add a settings screen"
+                          : "Message the agent…"
               }
               className="field-sizing-content block max-h-40 min-h-12 w-full resize-none bg-transparent px-2 pt-1.5 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/70 disabled:cursor-not-allowed"
             />
@@ -539,32 +638,98 @@ export function ChatPanel({
                 {fileError}
               </p>
             )}
-            <div className="flex items-center justify-between">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label="Attach file"
-                disabled={inputLocked || files.length >= MAX_ASSETS}
-                onClick={() => fileInputRef.current?.click()}
-                className={cn(
-                  "relative rounded-full text-muted-foreground hover:bg-brand/10 hover:text-brand-dark",
-                  files.length > 0 && "bg-brand/10 text-brand-dark"
-                )}
-              >
-                <PaperclipIcon className="size-4" />
-                {files.length > 0 && (
-                  <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-brand text-[10px] font-bold text-white">
-                    {files.length}
-                  </span>
-                )}
-              </Button>
+            <div className="flex items-center justify-between gap-1">
+              <div className="flex min-w-0 items-center gap-0.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Attach file"
+                  disabled={inputLocked || files.length >= MAX_ASSETS}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={cn(
+                    "relative shrink-0 rounded-full text-muted-foreground hover:bg-muted/60 hover:text-brand-dark",
+                    files.length > 0 && "text-brand-dark"
+                  )}
+                >
+                  <PaperclipIcon className="size-4" />
+                  {files.length > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full bg-brand text-[9px] font-bold text-white">
+                      {files.length}
+                    </span>
+                  )}
+                </Button>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    disabled={inputLocked}
+                    render={
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 gap-1 rounded-full px-2 text-xs font-medium text-muted-foreground hover:bg-muted/60 hover:text-brand-dark"
+                      />
+                    }
+                  >
+                    {mode === "plan" ? (
+                      <CompassIcon className="size-3.5" />
+                    ) : mode === "chat" ? (
+                      <MessageCircleIcon className="size-3.5" />
+                    ) : (
+                      <HammerIcon className="size-3.5" />
+                    )}
+                    <span>{AGENT_MODE_LABELS[mode]}</span>
+                    <ChevronDownIcon className="size-3 opacity-50" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent side="top" align="start" className="w-60 rounded-2xl">
+                    {AGENT_MODES.map((option) => {
+                      const Icon =
+                        option === "plan"
+                          ? CompassIcon
+                          : option === "chat"
+                            ? MessageCircleIcon
+                            : HammerIcon
+                      return (
+                        <DropdownMenuItem
+                          key={option}
+                          className="items-start rounded-xl py-2"
+                          onClick={() => setMode(option)}
+                        >
+                          <Icon className="mt-0.5 size-4" />
+                          <span className="flex min-w-0 flex-col">
+                            <span>{AGENT_MODE_LABELS[option]}</span>
+                            <span className="text-xs font-normal text-muted-foreground">
+                              {AGENT_MODE_DESCRIPTIONS[option]}
+                            </span>
+                          </span>
+                          {option === mode && <CheckIcon className="ml-auto text-brand" />}
+                        </DropdownMenuItem>
+                      )
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <VoiceDictationControls
+                  size="sm"
+                  disabled={inputLocked}
+                  onCharged={() => void refreshAccount()}
+                  onTranscript={(text) => {
+                    setDraft((prev) => {
+                      const trimmed = prev.trim()
+                      const next = trimmed ? `${trimmed} ${text}` : text
+                      return next.slice(0, MAX_PROMPT_LENGTH)
+                    })
+                  }}
+                />
+              </div>
+
               <Button
                 type="submit"
                 size="icon"
                 disabled={(!draft.trim() && files.length === 0) || inputLocked}
                 aria-label={busy || isUploading ? "The agent is working" : "Send message"}
-                className="rounded-full bg-brand text-white shadow-md shadow-brand/30 hover:opacity-95 disabled:from-muted disabled:to-muted disabled:text-muted-foreground disabled:opacity-100 disabled:shadow-none"
+                className="shrink-0 rounded-full bg-brand text-white shadow-md shadow-brand/30 hover:opacity-95 disabled:from-muted disabled:to-muted disabled:text-muted-foreground disabled:opacity-100 disabled:shadow-none"
               >
                 {busy || isUploading ? <Spinner className="text-current" /> : <ArrowUpIcon />}
               </Button>
@@ -603,9 +768,15 @@ function UserMessage({
   content: string
   onPreviewImage?: (asset: { fileName: string; url: string }) => void
 }) {
-  const { text, element, assets } = parseMessageContent(content)
+  const { text, mode, element, assets } = parseMessageContent(content)
   return (
     <div className="flex max-w-[85%] flex-col items-end gap-1.5">
+      {mode !== "build" && (
+        <span className="inline-flex items-center gap-1 rounded-full border border-brand/20 bg-brand/5 px-2 py-0.5 text-[10px] font-medium text-brand-dark">
+          {mode === "plan" ? <CompassIcon className="size-2.5" /> : <MessageCircleIcon className="size-2.5" />}
+          {AGENT_MODE_LABELS[mode]} mode
+        </span>
+      )}
       {element && (
         <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-brand/25 bg-brand/5 px-2 py-0.5 text-[11px] text-brand-dark">
           <SquareDashedMousePointerIcon className="size-3 shrink-0" />

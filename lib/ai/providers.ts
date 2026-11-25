@@ -164,7 +164,7 @@ function audioName(name: string, type: string) {
 }
 
 /** Groq Whisper. File upload, not a URL, so this server never fetches audio from the internet. */
-export async function transcribeAudio(file: Blob, filename: string) {
+export async function transcribeAudio(file: Blob, filename: string, language?: string | null) {
   const key = groqKey()
   if (!key) throw new AiProviderError("Voice isn't available right now.", 503)
   const form = new FormData()
@@ -172,6 +172,11 @@ export async function transcribeAudio(file: Blob, filename: string) {
   form.append("model", WHISPER_MODEL())
   form.append("response_format", "verbose_json")
   form.append("temperature", "0")
+  const lang = language?.trim().toLowerCase()
+  // Whisper ISO-639-1 codes. Omit for auto-detect.
+  if (lang && lang !== "auto" && /^[a-z]{2}$/.test(lang)) {
+    form.append("language", lang)
+  }
   const response = await fetch(GROQ_TRANSCRIPTIONS_URL, {
     method: "POST",
     headers: { authorization: `Bearer ${key}` },

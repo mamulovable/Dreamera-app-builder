@@ -6,6 +6,7 @@ import type { useProjectAgent } from "@/hooks/use-project-agent"
 import { componentFilePath, type AppPlan, type MessageAsset, type ProjectScreen } from "@/lib/agent-protocol"
 import { useAuth } from "@/lib/auth-client"
 import { isUpgradeReason } from "@/lib/plans"
+import type { AgentMode } from "@/lib/projects"
 import { useUpgradeDialog } from "@/components/billing/upgrade-dialog"
 import type { ElementInfo } from "@/lib/element-source"
 import { ELEMENT_LABELS, type ElementEdit, type ElementEdits, type ElementRect, type InspectedElement } from "@/lib/preview-protocol"
@@ -337,12 +338,23 @@ export function useInlineEditor(projectId: string, agent: Agent, imageTools: boo
 
   /** Saves what's waiting, then sends the message with the selected element if it's attached, or if `aboutSelection`. */
   const sendMessage = React.useCallback(
-    async (content: string, aboutSelectionOrAssets?: boolean | MessageAsset[], messageAssets?: MessageAsset[]) => {
+    async (
+      content: string,
+      aboutSelectionOrAssets?: boolean | MessageAsset[],
+      messageAssetsOrMode?: MessageAsset[] | AgentMode,
+      explicitMode?: AgentMode
+    ) => {
       await flush()
       const aboutSelection = typeof aboutSelectionOrAssets === "boolean" ? aboutSelectionOrAssets : false
-      const assets = Array.isArray(aboutSelectionOrAssets) ? aboutSelectionOrAssets : messageAssets
+      const assets = Array.isArray(aboutSelectionOrAssets)
+        ? aboutSelectionOrAssets
+        : Array.isArray(messageAssetsOrMode)
+          ? messageAssetsOrMode
+          : undefined
+      const mode: AgentMode | undefined =
+        typeof messageAssetsOrMode === "string" ? messageAssetsOrMode : explicitMode
       const current = aboutSelection || attachedRef.current ? selectionRef.current : null
-      if (!current) return send({ action: "message", content, assets })
+      if (!current) return send({ action: "message", content, mode, assets })
       const file = filesRef.current[current.file]
       const code = file?.base ?? fileCode(current.file) ?? ""
       // The file and line still lead the agent there if the code can't be read here.
@@ -353,6 +365,7 @@ export function useInlineEditor(projectId: string, agent: Agent, imageTools: boo
       const sent = await send({
         action: "message",
         content,
+        mode,
         element: { file: current.file, line, label: ELEMENT_LABELS[current.type] ?? current.type, screen, snippet },
         assets,
       })

@@ -2,15 +2,18 @@ import { NextResponse } from "next/server"
 import { desc, eq } from "drizzle-orm"
 
 import { db, messages, projectAssets, projects } from "@/db"
+import { messageWithAssetsAndElement } from "@/lib/agent-protocol"
 import { assertCanUseAgent, assertProjectSlot, claimProjectSlot, hasProjectSlot, PlanLimitError, planLimitResponse } from "@/lib/billing/credits"
 import { LAST_EDITED, SUMMARY_COLUMNS, toProjectSummary } from "@/lib/project-summaries"
 import {
   isAcceptedAsset,
+  isAgentMode,
   isProjectPlatform,
   MAX_ASSET_SIZE,
   MAX_ASSETS,
   MAX_PROMPT_LENGTH,
   projectNameFromPrompt,
+  type AgentMode,
 } from "@/lib/projects"
 import { getCurrentUser } from "@/lib/session"
 import { deleteObjects, safeFileName, uploadObject } from "@/lib/storage"
@@ -69,6 +72,9 @@ export async function POST(request: Request) {
   const platform = form.get("platform")
   if (!isProjectPlatform(platform)) return badRequest("Choose a platform.")
 
+  const rawMode = form.get("mode")
+  const mode: AgentMode = isAgentMode(rawMode) ? rawMode : "build"
+
   const files = form.getAll("files").filter((f): f is File => f instanceof File && f.size > 0)
   if (files.length > MAX_ASSETS) return badRequest(`You can attach up to ${MAX_ASSETS} files.`)
   for (const file of files) {
@@ -120,7 +126,11 @@ export async function POST(request: Request) {
         })
         .returning({ id: projects.id, status: projects.status })
 
-      await tx.insert(messages).values({ projectId, role: "user", content: prompt })
+      await tx.insert(messages).values({
+        projectId,
+        role: "user",
+        content: messageWithAssetsAndElement(prompt, null, null, mode),
+      })
 
       if (assets.length > 0) {
         await tx.insert(projectAssets).values(

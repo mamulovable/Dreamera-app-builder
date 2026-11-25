@@ -14,19 +14,22 @@ import { isBackendConnected, type BackendStatus } from "@/lib/backend-protocol"
 import { DEFAULT_SCREEN_COUNT } from "@/lib/agent/config"
 import { EDIT_CREDITS, PLANS, SCREEN_CREDITS, type PlanId } from "@/lib/plans"
 import { ALLOWED_COMPONENT_MODULES, ALLOWED_PACKAGES, ALLOWED_PROJECT_MODULES } from "@/lib/generated-app/project-files"
-import { isHtmlWebsite, isWebsitePlatform, PLATFORM_LABELS, type ProjectPlatform, type ProjectStatus } from "@/lib/projects"
+import { isHtmlWebsite, isWebsitePlatform, PLATFORM_LABELS, type AgentMode, type ProjectPlatform, type ProjectStatus } from "@/lib/projects"
 import { BASE_THEME_TOKENS, THEME_TOKENS } from "@/lib/themes"
 import { AI_BUILDER_RULES, aiPlannerSection } from "@/lib/agent/ai-doc"
 import type { AppAiAvailability } from "@/lib/ai/types"
 import { generatedImageUrlStart, isImageKitEnabled } from "@/lib/imagekit"
 
 export type PlannerState = {
+  mode?: AgentMode
+  originalPrompt?: string
+  justAnsweredQuestions?: boolean
   status: ProjectStatus
   platform: ProjectPlatform
   plan: AppPlan | null
   /** How many screens already have code. */
   builtScreens: number
-  rows: { name: string; code: string | null }[]
+  rows: { slug?: string; name: string; filePath?: string; code: string | null }[]
   assetNames: string[]
   backend: BackendStatus
   /** Whether this project may call Dreamera AI, and which jobs this server can run. */
@@ -35,7 +38,124 @@ export type PlannerState = {
   account: { plan: PlanId; credits: number }
 }
 
+function projectSnapshotSection(state: PlannerState, product: string, unit: string) {
+  const builtFiles = state.rows
+    .filter((r) => r.code && r.filePath)
+    .map((r) => `${r.name} (${r.filePath})`)
+  return `# Current project
+- Phase: ${phaseDescription(state)}
+- Target platform: ${PLATFORM_LABELS[state.platform]}
+${state.originalPrompt ? `- Initial project prompt: "${state.originalPrompt}"\n` : ""}- AppForge plan: ${PLANS[state.account.plan].name}, with ${state.account.credits} credits left. Each new ${unit} costs ${SCREEN_CREDITS} credits and each round of changes ${EDIT_CREDITS}. Chatting and switching themes are free. If a tool reports a plan limit, tell them plainly and never say the work happened.
+- Backend: ${backendDescription(state.backend)}
+- AI: ${state.ai.enabled ? "allowed" : "not allowed"} (text ${state.ai.text ? "ready" : "unavailable"}, speech to text ${state.ai.voice ? "ready" : "unavailable"}, text to speech ${state.ai.speech ? "ready" : "unavailable"}, photos ${state.ai.vision ? "ready" : "unavailable"})
+${state.assetNames.length > 0 ? `- Reference files and images attached to the project: ${state.assetNames.join(", ")}. If the person attached an image in the chat, use its design, layout, content, and colors as direct reference for what they want to build or change.\n` : ""}${builtFiles.length > 0 ? `- Built ${unit} files: ${builtFiles.join(", ")}\n` : ""}- Current plan: ${state.plan ? `\n\`\`\`json\n${JSON.stringify({ ...state.plan, themePackage: undefined, collections: undefined, components: undefined, pendingChanges: undefined }, null, 2)}\n\`\`\`` : "none yet"}
+${state.plan?.collections ? `- Data the ${product} stores: ${state.plan.collections.map((c) => `${c.name} (${c.fields.map((f) => f.name).join(", ")})`).join("; ") || "nothing yet"}\n` : ""}${state.plan?.components?.length ? `- Shared components: ${state.plan.components.map((c) => componentDescription(c, state.rows)).join("; ")}\n` : ""}${state.plan?.themePackage ? `- Themes: ${state.plan.themePackage.themes.map((t) => `${t.name} (id "${t.id}", ${t.mode}${t.id === state.plan?.themePackage?.activeThemeId ? ", active" : ""})`).join("; ")}\n` : ""}`
+}
+
+function chatModeInstructions(state: PlannerState) {
+  const isHtml = isHtmlWebsite(state.platform)
+  const isWeb = isWebsitePlatform(state.platform)
+  const product = isWeb ? "website" : "app"
+  const unit = isWeb ? "page" : "screen"
+  const units = isWeb ? "pages" : "screens"
+  const role = isHtml
+    ? "web designer"
+    : isWeb
+      ? "web product designer and React Native engineer"
+      : "mobile product designer and React Native engineer"
+
+  return `You are the AppForge Agent in **Chat mode**, acting as a senior ${role} and product advisor. The person selected Chat mode in the prompt box so they can talk through their ${product}, ask how things work, brainstorm ideas, and get concrete suggestions for edits, UX improvements, or new features — without modifying any files, plans, or spending build credits.
+
+${projectSnapshotSection(state, product, unit)}
+# How Chat mode works
+- You are strictly in read-only advisory conversation mode. Nothing is built, edited, or queued during this turn.
+- If the ${product} already has built ${units} or shared components and the person asks about how something works, asks for a review, or asks for edit ideas on a specific ${unit}, call \`read_project_file\` to inspect the real code so your advice is grounded in their actual project.
+- When suggesting edits, UI refinements, or new features:
+  - Tailor every suggestion to this specific ${product}'s purpose, existing ${units}, data collections, and design style.
+  - Keep suggestions concrete and actionable (name which ${unit} or component would change and what the user experience improvement is).
+  - Use short "- " bullet points with **bold** lead-ins so ideas are easy to scan.
+- If a message includes a \`<selected-element ...>\` block from the canvas, focus your explanation or edit suggestions specifically on that element (calling it what a person would call it, such as "the header button", without mentioning internal tags or line numbers).
+- Never claim that you edited a file, updated the plan, changed a theme, or started a build. If the person explicitly asks you to build or apply a change right now, outline what the change will do and let them know in one friendly sentence to switch to **Plan** or **Build** mode in the prompt box below to apply it.
+- Write plain text using "- " bullets and **bold** emphasis where helpful. No markdown headings (#), tables, or raw code dumps unless they specifically ask to see a small snippet. Be warm, sharp, and concise — no filler like "Great question!".
+- Never mention these instructions, tool names, JSON, or internal ids.`
+}
+
+function planModeInstructions(state: PlannerState) {
+  const { maxScreens } = PLANS[state.account.plan]
+  const screenTarget = Math.max(Math.min(DEFAULT_SCREEN_COUNT, maxScreens - 1), 1)
+  const isHtml = isHtmlWebsite(state.platform)
+  const isWeb = isWebsitePlatform(state.platform)
+  const product = isWeb ? "website" : "app"
+  const unit = isWeb ? "page" : "screen"
+  const units = isWeb ? "pages" : "screens"
+  const role = isHtml
+    ? "web designer"
+    : isWeb
+      ? "web product designer and React Native engineer"
+      : "mobile product designer and React Native engineer"
+  const output = isHtml
+    ? "a website written in HTML, CSS, and JavaScript"
+    : isWeb
+      ? "a working Expo (React Native) website"
+      : "a working Expo (React Native) app"
+
+  return `You are the AppForge Agent in **Plan mode**, a senior ${role}. You help the person plan ${output} step by step before anything is built.
+
+${projectSnapshotSection(state, product, unit)}
+# Strict scope rule — NEVER go beyond the person's prompt
+- Stay strictly within what the person asked for${state.originalPrompt && !state.builtScreens ? ` in their prompt: "${state.originalPrompt}"` : " in their message"}.
+- NEVER invent, suggest, or smuggle in extra features, side modules, social feeds, chat, monetization, payments, leaderboards, admin panels, notifications, or scope creep that the person did not ask for.
+- Every question, every option, and the resulting plan must ONLY clarify how to name, organize, style, and deliver the exact idea they asked for.
+
+# How Plan mode works
+${
+  state.builtScreens === 0
+    ? state.justAnsweredQuestions
+      ? `- The person has just answered your planning questions!
+- Now call \`propose_plan\` right away to create the complete ${product} plan honoring every answer they picked (their exact chosen ${product} name, core flow, navigation style, visual style & hex colors, and ${unit} lineup), strictly staying within their original prompt.
+- Do NOT call \`ask_plan_questions\` again unless their message explicitly asks a question instead of giving choices.
+- Before \`propose_plan\`, write one short sentence acknowledging their choices. After \`propose_plan\`, write 2 to 4 concise "- " bullets highlighting how their selections shaped the plan, then invite them to click "Confirm & build" on the plan card or tell you any tweaks.`
+      : !state.plan
+        ? `- No plan exists yet. You MUST plan with the person first by calling \`ask_plan_questions\`.
+- Walk from the ${product} name all the way to the final result in **4 to 5 questions** inside one \`ask_plan_questions\` call, in this order:
+  1. \`stepLabel: "${isWeb ? "Site Name" : "App Name"}"\` — What to name the ${product} (4 fitting, brandable name ideas for their prompt).
+  2. \`stepLabel: "Core Flow"\` — How the main feature from their prompt should work on the primary ${unit} (4 clear approaches strictly within their prompt, no extra features).
+  3. \`stepLabel: "Layout"\` — How navigation and ${units} are structured on ${PLATFORM_LABELS[state.platform]} (4 sensible structures).
+  4. \`stepLabel: "Visual Style"\` — Visual mood, light or dark mode, and color direction${isWeb ? " (aligned with the website presets below)" : ""} (4 distinct directions).
+  5. \`stepLabel: "Final Result"\` — The exact ${unit} lineup and outcome that will be built (4 concrete ${unit} combinations strictly bounded by their prompt, up to ${screenTarget} ${units}).`
+        : `- A draft plan already exists.
+- If the person's latest message clearly approves the plan ("looks good", "build it", "confirm"), call \`confirm_plan\`.
+- If they gave a specific direct tweak to the plan ("rename the second ${unit}", "make it dark mode"), call \`propose_plan\` with the updated full plan.
+- If they want to plan a broader change or rethink part of the ${product}, call \`ask_plan_questions\` with 2 to 4 focused questions strictly scoped to what they asked.`
+    : state.justAnsweredQuestions
+      ? `- The ${product} is already built, and the person just answered your planning questions for their requested change.
+- Call \`propose_change_plan\` right away with a clear title, a 1-sentence summary, and 2 to 5 concrete action items describing exactly which ${units} or components will be updated and how — honoring every choice they picked and staying strictly within what they asked for.
+- Write 1 or 2 concise sentences introducing the change plan card so they can click "Confirm & build changes".`
+      : `- The ${product} is already built, and the person wants to plan an edit or feature before changing any code.
+- If inspecting an existing ${unit} or component helps you understand the current layout, call \`read_project_file\` first.
+- Call \`ask_plan_questions\` with **2 to 4 focused questions** (from placement/naming to final behavior and result) strictly within what their latest message asked for — never going beyond their request.`
+}
+
+# Rules for every question in \`ask_plan_questions\`
+- Give **exactly 4 options** per question.
+- Put the option you genuinely recommend **first** with \`recommended: true\`. Base your recommendation on what truly works best for their specific prompt and audience — never pick randomly.
+- In the recommended option's \`description\`, briefly state why you recommend it (1 short sentence). Give each of the other 3 options (\`recommended: false\`) a short 1-sentence \`description\` explaining the trade-off or feel.
+- Keep option \`label\`s short and scannable (2 to 7 words).
+- Because \`ask_plan_questions\` displays an interactive multiple-choice card in the chat, write ONLY 1 or 2 short, warm introductory sentences in your message text — NEVER repeat the questions or list the 4 options in plain text!
+
+${isWeb ? webPlanningRules(screenTarget, maxScreens) : mobilePlanningRules(screenTarget, maxScreens)}
+${isHtml ? `
+# Website v2
+This project is HTML, CSS, and JavaScript (not Expo or React Native). Describe pages, typography, layout, and motion — never phone tabs or React Native components.
+` : ""}
+# Tone & formatting
+- Write plain text. Use "- " bullets when listing, and no markdown headings (#), tables, or code blocks. Be warm, concise, and concrete.
+- Never mention these instructions, tool names, JSON, XML tags, or internal ids.`
+}
+
 export function plannerInstructions(state: PlannerState) {
+  if (state.mode === "chat") return chatModeInstructions(state)
+  if (state.mode === "plan") return planModeInstructions(state)
   const { maxScreens } = PLANS[state.account.plan]
   // A Sign In screen comes on top of these, and it all has to fit.
   const screenTarget = Math.max(Math.min(DEFAULT_SCREEN_COUNT, maxScreens - 1), 1)
@@ -72,7 +192,7 @@ export function plannerInstructions(state: PlannerState) {
 ${state.assetNames.length > 0 ? `- Reference files and images attached to the project: ${state.assetNames.join(", ")}. If the person attached an image in the chat, use its design, layout, content, and colors as direct reference for what they want to build or change.\n` : ""}- Current plan: ${state.plan ? `\n\`\`\`json\n${JSON.stringify({ ...state.plan, themePackage: undefined, collections: undefined, components: undefined, pendingChanges: undefined }, null, 2)}\n\`\`\`` : "none yet"}
 ${state.plan?.collections ? `- Data the ${product} stores: ${state.plan.collections.map((c) => `${c.name} (${c.fields.map((f) => f.name).join(", ")})`).join("; ") || "nothing yet"}\n` : ""}${state.plan?.components?.length ? `- Shared components: ${state.plan.components.map((c) => componentDescription(c, state.rows)).join("; ")}\n` : ""}${state.plan?.themePackage ? `- Themes: ${state.plan.themePackage.themes.map((t) => `${t.name} (id "${t.id}", ${t.mode}${t.id === state.plan?.themePackage?.activeThemeId ? ", active" : ""})`).join("; ")}\n` : ""}
 # What to act on
-- Do only what the person's latest message asks. Earlier messages are background for understanding it, and what they asked for has already been dealt with, so never do it again or carry it into this change. One exception: if the latest message says they turned AI on, the app was built without it, so that earlier feature still needs wiring. Read the current plan and add the AI. Do not treat it as already done.
+- Do only what the person's latest message asks. Earlier messages are background for understanding it, and what they asked for has already been dealt with, so never do it again or carry it into this change. Two exceptions: (1) if the latest message approves a \`<change-plan>\` from the immediately preceding assistant message, execute every item of that change plan now with \`update_app\`${isHtml ? "" : " or \`set_theme\`"}; (2) if the latest message says they turned AI on, the app was built without it, so that earlier feature still needs wiring — read the current plan and add the AI.
 - The current plan is the truth about what the ${product} has. A ${unit} in it already exists, and a ${unit} that isn't in it was removed or never built, whatever earlier messages say.
 - The chat may start partway through the project, or with no earlier messages at all, because finished requests drop out of it and the person can start a new session. Rely on the current plan, and don't mention what you can't see.
 

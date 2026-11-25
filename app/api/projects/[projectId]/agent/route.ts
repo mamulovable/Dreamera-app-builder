@@ -15,7 +15,7 @@ import { applyAppChanges } from "@/lib/agent/changes"
 import { runPlannerTurn } from "@/lib/agent/planner"
 import { getRun, startRun, type ProjectRun } from "@/lib/agent/runs"
 import { assertCanUseAgent, chargeForBuild, chargeForScreenRetry, PlanLimitError, planLimitResponse, refundCharge, type BuildCharge } from "@/lib/billing/credits"
-import { isHtmlWebsite, MAX_PROMPT_LENGTH } from "@/lib/projects"
+import { isAgentMode, isHtmlWebsite, MAX_PROMPT_LENGTH, type AgentMode } from "@/lib/projects"
 import { originFromRequest } from "@/lib/jobs"
 import { getCurrentUser, type SessionUser } from "@/lib/session"
 
@@ -65,15 +65,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
     const content = String(body.content ?? "").trim()
     if (!content) return error("Write a message first.", 400)
     if (content.length > MAX_PROMPT_LENGTH) return error(`Keep your message under ${MAX_PROMPT_LENGTH} characters.`, 400)
-    try {
-      assertCanUseAgent(user.credits)
-    } catch (cause) {
-      if (cause instanceof PlanLimitError) return planLimitResponse(cause)
-      throw cause
+    const mode: AgentMode = isAgentMode(body.mode) ? body.mode : "build"
+    if (mode !== "chat") {
+      try {
+        assertCanUseAgent(user.credits)
+      } catch (cause) {
+        if (cause instanceof PlanLimitError) return planLimitResponse(cause)
+        throw cause
+      }
     }
     const element = readElementContext(body.element)
     const assets = readAssetsContext(body.assets)
-    const formatted = messageWithAssetsAndElement(content, element, assets)
+    const formatted = messageWithAssetsAndElement(content, element, assets, mode)
     await db.insert(messages).values({ projectId: project.id, role: "user", content: formatted })
     return streamRun(startRun(project.id, (run) => respond(run, project, user, origin)), request)
   }

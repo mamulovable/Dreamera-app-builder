@@ -123,7 +123,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       task = "transcribe"
       inputPreview = "Voice recording"
       inputBytes = file.size
-      run = () => transcribeAudio(file, file.name || "note.m4a")
+      const language = String(form.get("language") ?? "").trim().toLowerCase() || null
+      run = () => transcribeAudio(file, file.name || "note.m4a", language)
     } else if (formTask === "vision") {
       const question = String(form.get("question") ?? "").trim()
       if (!question || question.length > MAX_QUESTION) return fail("Ask a shorter question about the photo.", 400)

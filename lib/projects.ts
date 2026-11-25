@@ -3,6 +3,25 @@
 export const PROJECT_PLATFORMS = ["ios-android", "ios", "android", "web", "web-v2"] as const
 export type ProjectPlatform = (typeof PROJECT_PLATFORMS)[number]
 
+export const AGENT_MODES = ["build", "plan", "chat"] as const
+export type AgentMode = (typeof AGENT_MODES)[number]
+
+export const AGENT_MODE_LABELS: Record<AgentMode, string> = {
+  build: "Build",
+  plan: "Plan",
+  chat: "Chat",
+}
+
+export const AGENT_MODE_DESCRIPTIONS: Record<AgentMode, string> = {
+  build: "Build or update screens right away",
+  plan: "Plan step by step with AI recommendations",
+  chat: "Chat with your project & get suggestions",
+}
+
+export function isAgentMode(value: unknown): value is AgentMode {
+  return AGENT_MODES.includes(value as AgentMode)
+}
+
 export const PLATFORM_LABELS: Record<ProjectPlatform, string> = {
   "ios-android": "iOS & Android",
   ios: "iOS only",

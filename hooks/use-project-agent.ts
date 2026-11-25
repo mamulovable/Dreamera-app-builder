@@ -46,6 +46,7 @@ type Action =
   | { type: "backend-changed"; backend: BackendStatus; plan: AppPlan | null }
   | { type: "new-session" }
   | { type: "file-code"; path: string; code: string }
+  | { type: "rename"; name: string }
 
 function reducer(state: AgentState, action: Action): AgentState {
   switch (action.type) {
@@ -88,6 +89,11 @@ function reducer(state: AgentState, action: Action): AgentState {
           ...state.plan,
           components: state.plan.components?.map((c) => (componentFilePath(c.name) === action.path ? { ...c, code: action.code } : c)),
         },
+      }
+    case "rename":
+      return {
+        ...state,
+        plan: state.plan ? { ...state.plan, appName: action.name } : state.plan,
       }
   }
 }
@@ -200,7 +206,7 @@ export function useProjectAgent(
           ? {
               id: `local-${Date.now()}`,
               role: "user" as const,
-              content: messageWithAssetsAndElement(request.content, request.element, request.assets),
+              content: messageWithAssetsAndElement(request.content, request.element, request.assets, request.mode),
             }
           : request.action === "confirm"
             ? { id: `local-${Date.now()}`, role: "user" as const, content: "Looks good, build it!" }
@@ -316,5 +322,8 @@ export function useProjectAgent(
   /** Shows a file's latest code, after an edit made by hand. */
   const setFileCode = React.useCallback((path: string, code: string) => dispatch({ type: "file-code", path, code }), [])
 
-  return { ...state, send, setTheme, changeBackend, startNewSession, setFileCode }
+  /** Keeps the workspace title in sync after a rename. */
+  const setAppName = React.useCallback((name: string) => dispatch({ type: "rename", name }), [])
+
+  return { ...state, send, setTheme, changeBackend, startNewSession, setFileCode, setAppName }
 }
