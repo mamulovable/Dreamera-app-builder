@@ -11,18 +11,19 @@ type VoicePhase = "idle" | "connecting" | "recording" | "finalizing"
 type UseVoiceDictationOptions = {
   language: VoiceLanguageCode
   disabled?: boolean
-  /**
-   * Live session text while speaking (SMART transcript / interim preview).
-   * `null` when the session ends or is cancelled.
-   */
   onPartial?: (text: string | null) => void
-  /** Final cleaned transcript when the user stops the mic. */
   onTranscript: (text: string) => void
   onNeedAuth?: () => void
   onCharged?: () => void
 }
 
+type LiveSessionPayload = {
+  wsUrl: string
+  setup: Record<string, unknown>
+}
+
 const TARGET_RATE = 16_000
+const PCM_MIME = "audio/pcm;rate=16000"
 
 function floatTo16BitPcm(input: Float32Array) {
   const buffer = new ArrayBuffer(input.length * 2)
@@ -55,9 +56,15 @@ function encodeBase64(buffer: ArrayBuffer) {
   return btoa(binary)
 }
 
+function readTranscription(value: unknown): string {
+  if (!value || typeof value !== "object") return ""
+  const text = (value as { text?: unknown }).text
+  return typeof text === "string" ? text : ""
+}
+
 /**
  * Realtime voice dictation via Gemini Live (`gemini-3.5-transcribe-live`).
- * The browser captures PCM; our server holds the Gemini socket.
+ * Browser opens Gemini with a short-lived token from `/api/transcribe/live`.
  */
 export function useVoiceDictation({
   language,
@@ -78,16 +85,18 @@ export function useVoiceDictation({
   const onTranscriptRef = React.useRef(onTranscript)
   const onChargedRef = React.useRef(onCharged)
 
-  const sessionIdRef = React.useRef<string | null>(null)
-  const eventSourceRef = React.useRef<EventSource | null>(null)
+  const wsRef = React.useRef<WebSocket | null>(null)
   const streamRef = React.useRef<MediaStream | null>(null)
   const audioContextRef = React.useRef<AudioContext | null>(null)
   const processorRef = React.useRef<ScriptProcessorNode | null>(null)
   const sourceRef = React.useRef<MediaStreamAudioSourceNode | null>(null)
   const timerRef = React.useRef<ReturnType<typeof setInterval> | null>(null)
   const stopAtRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-  const sendingRef = React.useRef(false)
+  const setupReadyRef = React.useRef(false)
+  const stoppingRef = React.useRef(false)
   const finalTextRef = React.useRef("")
+  const interimRef = React.useRef("")
+  const finalizeTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const stopRef = React.useRef<(() => void) | null>(null)
 
   React.useEffect(() => {
@@ -97,10 +106,12 @@ export function useVoiceDictation({
     onChargedRef.current = onCharged
   })
 
-  const publishLive = React.useCallback((text: string) => {
-    finalTextRef.current = text
-    setLiveText(text)
-    onPartialRef.current?.(text || null)
+  const publishLive = React.useCallback((finalText: string, interim: string) => {
+    finalTextRef.current = finalText
+    interimRef.current = interim
+    const next = interim ? (finalText ? `${finalText} ${interim}` : interim) : finalText
+    setLiveText(next)
+    onPartialRef.current?.(next || null)
   }, [])
 
   const cleanupAudio = React.useCallback(() => {
@@ -129,81 +140,23 @@ export function useVoiceDictation({
     timerRef.current = null
     if (stopAtRef.current) clearTimeout(stopAtRef.current)
     stopAtRef.current = null
+    if (finalizeTimerRef.current) clearTimeout(finalizeTimerRef.current)
+    finalizeTimerRef.current = null
     cleanupAudio()
-    eventSourceRef.current?.close()
-    eventSourceRef.current = null
-    sendingRef.current = false
-    sessionIdRef.current = null
+    const ws = wsRef.current
+    wsRef.current = null
+    setupReadyRef.current = false
+    stoppingRef.current = false
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      try {
+        ws.close()
+      } catch {
+        // ignore
+      }
+    }
   }, [cleanupAudio])
 
   React.useEffect(() => () => cleanupSession(), [cleanupSession])
-
-  const postAudio = React.useCallback(async (sessionId: string, payload: Record<string, unknown>) => {
-    try {
-      await fetch(`/api/transcribe/live/${sessionId}/audio`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-        keepalive: true,
-      })
-    } catch {
-      // Drop a chunk rather than killing the whole dictation.
-    }
-  }, [])
-
-  const startMicStreaming = React.useCallback(
-    async (sessionId: string) => {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-        },
-      })
-      streamRef.current = stream
-
-      const AudioCtx =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-      const audioContext = new AudioCtx()
-      audioContextRef.current = audioContext
-      if (audioContext.state === "suspended") await audioContext.resume()
-
-      const source = audioContext.createMediaStreamSource(stream)
-      sourceRef.current = source
-      const processor = audioContext.createScriptProcessor(4096, 1, 1)
-      processorRef.current = processor
-
-      let queue: Promise<void> = Promise.resolve()
-      processor.onaudioprocess = (event) => {
-        if (!sendingRef.current) return
-        const input = event.inputBuffer.getChannelData(0)
-        const down = downsample(input, audioContext.sampleRate, TARGET_RATE)
-        if (down.length === 0) return
-        const pcm = encodeBase64(floatTo16BitPcm(down))
-        queue = queue.then(() => postAudio(sessionId, { pcm }))
-      }
-
-      const mute = audioContext.createGain()
-      mute.gain.value = 0
-      source.connect(processor)
-      processor.connect(mute)
-      mute.connect(audioContext.destination)
-
-      sendingRef.current = true
-      await postAudio(sessionId, { activity: "start" })
-      setPhase("recording")
-      setElapsed(0)
-      const startedAt = Date.now()
-      timerRef.current = setInterval(() => {
-        setElapsed(Math.floor((Date.now() - startedAt) / 1000))
-      }, 250)
-      stopAtRef.current = setTimeout(() => {
-        void stopRef.current?.()
-      }, MAX_VOICE_SECONDS * 1000)
-    },
-    [postAudio]
-  )
 
   const finishWithText = React.useCallback(
     (text: string) => {
@@ -222,9 +175,190 @@ export function useVoiceDictation({
     [cleanupSession]
   )
 
+  const sendJson = React.useCallback((payload: unknown) => {
+    const ws = wsRef.current
+    if (!ws || ws.readyState !== WebSocket.OPEN) return
+    ws.send(JSON.stringify(payload))
+  }, [])
+
+  const startMicStreaming = React.useCallback(async () => {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+      },
+    })
+    streamRef.current = stream
+
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    const audioContext = new AudioCtx()
+    audioContextRef.current = audioContext
+    if (audioContext.state === "suspended") await audioContext.resume()
+
+    const source = audioContext.createMediaStreamSource(stream)
+    sourceRef.current = source
+    const processor = audioContext.createScriptProcessor(4096, 1, 1)
+    processorRef.current = processor
+
+    processor.onaudioprocess = (event) => {
+      if (!setupReadyRef.current || stoppingRef.current) return
+      const input = event.inputBuffer.getChannelData(0)
+      const down = downsample(input, audioContext.sampleRate, TARGET_RATE)
+      if (down.length === 0) return
+      sendJson({
+        realtimeInput: {
+          audio: {
+            mimeType: PCM_MIME,
+            data: encodeBase64(floatTo16BitPcm(down)),
+          },
+        },
+      })
+    }
+
+    const mute = audioContext.createGain()
+    mute.gain.value = 0
+    source.connect(processor)
+    processor.connect(mute)
+    mute.connect(audioContext.destination)
+
+    sendJson({ realtimeInput: { activityStart: {} } })
+    setPhase("recording")
+    setElapsed(0)
+    const startedAt = Date.now()
+    timerRef.current = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startedAt) / 1000))
+    }, 250)
+    stopAtRef.current = setTimeout(() => {
+      void stopRef.current?.()
+    }, MAX_VOICE_SECONDS * 1000)
+  }, [sendJson])
+
+  const openLiveSession = React.useCallback(
+    async (session: LiveSessionPayload) => {
+      await new Promise<void>((resolve, reject) => {
+        let settled = false
+        const fail = (message: string) => {
+          if (settled) return
+          settled = true
+          reject(new Error(message))
+        }
+        const ok = () => {
+          if (settled) return
+          settled = true
+          resolve()
+        }
+
+        const ws = new WebSocket(session.wsUrl)
+        wsRef.current = ws
+
+        const readyTimeout = setTimeout(() => {
+          fail("Live transcription timed out while connecting. Try again.")
+          try {
+            ws.close()
+          } catch {
+            // ignore
+          }
+        }, 12_000)
+
+        const clearReadyTimeout = () => clearTimeout(readyTimeout)
+        const failAndClear = (message: string) => {
+          clearReadyTimeout()
+          fail(message)
+        }
+        const okAndClear = () => {
+          clearReadyTimeout()
+          ok()
+        }
+
+        ws.onopen = () => {
+          try {
+            ws.send(JSON.stringify({ setup: session.setup }))
+          } catch {
+            failAndClear("Couldn't start live transcription. Try again.")
+          }
+        }
+
+        ws.onerror = () => {
+          failAndClear("Couldn't reach Gemini Live. Check your connection and try again.")
+        }
+
+        ws.onclose = (event) => {
+          if (setupReadyRef.current || stoppingRef.current) return
+          const detail = event.reason?.trim()
+          failAndClear(
+            detail ? `Live transcription closed: ${detail}` : "Couldn't start live transcription. Try again."
+          )
+        }
+
+        ws.onmessage = (event) => {
+          let message: Record<string, unknown>
+          try {
+            message = JSON.parse(typeof event.data === "string" ? event.data : "") as Record<string, unknown>
+          } catch {
+            return
+          }
+
+          const apiError = message.error as { message?: unknown } | undefined
+          if (apiError) {
+            const detail = typeof apiError.message === "string" ? apiError.message : ""
+            failAndClear(detail || "Couldn't start live transcription. Try again.")
+            try {
+              ws.close()
+            } catch {
+              // ignore
+            }
+            return
+          }
+
+          if (message.setupComplete !== undefined) {
+            setupReadyRef.current = true
+            void startMicStreaming()
+              .then(() => okAndClear())
+              .catch((cause) => {
+                failAndClear(cause instanceof Error ? cause.message : "Microphone access was blocked.")
+              })
+            return
+          }
+
+          const serverContent = message.serverContent as Record<string, unknown> | undefined
+          if (!serverContent) return
+
+          const interim = readTranscription(serverContent.interimInputTranscription)
+          if (interim) publishLive(finalTextRef.current, interim)
+
+          if (serverContent.inputTranscription !== undefined) {
+            const finalPiece = readTranscription(serverContent.inputTranscription)
+            publishLive(finalPiece, "")
+            if (stoppingRef.current) {
+              if (finalizeTimerRef.current) clearTimeout(finalizeTimerRef.current)
+              finishWithText(finalPiece)
+            }
+          }
+
+          if (
+            stoppingRef.current &&
+            (serverContent.generationComplete === true || serverContent.turnComplete === true) &&
+            finalTextRef.current
+          ) {
+            if (finalizeTimerRef.current) clearTimeout(finalizeTimerRef.current)
+            finishWithText(finalTextRef.current)
+          }
+        }
+      })
+    },
+    [finishWithText, publishLive, startMicStreaming]
+  )
+
   const start = React.useCallback(async () => {
     if (disabled || phase !== "idle") return
     if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setError("Voice dictation isn't supported in this browser.")
+      return
+    }
+    if (typeof WebSocket === "undefined") {
       setError("Voice dictation isn't supported in this browser.")
       return
     }
@@ -232,6 +366,7 @@ export function useVoiceDictation({
     setError(null)
     setLiveText("")
     finalTextRef.current = ""
+    interimRef.current = ""
     onPartialRef.current?.(null)
     setPhase("connecting")
 
@@ -251,65 +386,12 @@ export function useVoiceDictation({
         if (isUpgradeReason(data?.code)) openUpgrade(data.code)
         throw new Error(data?.error || "Couldn't start live transcription. Try again.")
       }
+      const wsUrl = typeof data?.wsUrl === "string" ? data.wsUrl : ""
+      const setup = data?.setup && typeof data.setup === "object" ? (data.setup as Record<string, unknown>) : null
+      if (!wsUrl || !setup) throw new Error("Couldn't start live transcription. Try again.")
 
-      const sessionId = typeof data?.sessionId === "string" ? data.sessionId : ""
-      if (!sessionId) throw new Error("Couldn't start live transcription. Try again.")
-      sessionIdRef.current = sessionId
+      await openLiveSession({ wsUrl, setup })
       onChargedRef.current?.()
-
-      await new Promise<void>((resolve, reject) => {
-        const events = new EventSource(`/api/transcribe/live/${sessionId}/events`)
-        eventSourceRef.current = events
-        let ready = false
-
-        const fail = (message: string) => {
-          events.close()
-          reject(new Error(message))
-        }
-
-        const readyTimeout = setTimeout(() => {
-          fail("Live transcription timed out while connecting. Try again.")
-        }, 12_000)
-
-        events.onmessage = (event) => {
-          let payload: { type?: string; text?: string; message?: string }
-          try {
-            payload = JSON.parse(event.data) as { type?: string; text?: string; message?: string }
-          } catch {
-            return
-          }
-
-          if (payload.type === "ready") {
-            if (ready) return
-            ready = true
-            clearTimeout(readyTimeout)
-            void startMicStreaming(sessionId)
-              .then(() => resolve())
-              .catch((cause) => {
-                fail(cause instanceof Error ? cause.message : "Microphone access was blocked.")
-              })
-            return
-          }
-
-          if (payload.type === "partial" && typeof payload.text === "string") {
-            publishLive(payload.text)
-            return
-          }
-
-          if (payload.type === "final" && typeof payload.text === "string") {
-            publishLive(payload.text)
-            return
-          }
-
-          if (payload.type === "error") {
-            fail(payload.message || "Couldn't start live transcription. Try again.")
-          }
-        }
-
-        events.onerror = () => {
-          if (!ready) fail("Couldn't start live transcription. Try again.")
-        }
-      })
     } catch (cause) {
       cleanupSession()
       setPhase("idle")
@@ -317,42 +399,37 @@ export function useVoiceDictation({
       onPartialRef.current?.(null)
       setError(cause instanceof Error ? cause.message : "Couldn't start live transcription. Try again.")
     }
-  }, [cleanupSession, disabled, onNeedAuth, openUpgrade, phase, publishLive, startMicStreaming])
+  }, [cleanupSession, disabled, onNeedAuth, openLiveSession, openUpgrade, phase])
 
   const stop = React.useCallback(() => {
     if (phase !== "recording" && phase !== "connecting") return
+    if (stoppingRef.current) return
+    stoppingRef.current = true
     setPhase("finalizing")
-    sendingRef.current = false
 
     if (timerRef.current) clearInterval(timerRef.current)
     timerRef.current = null
     if (stopAtRef.current) clearTimeout(stopAtRef.current)
     stopAtRef.current = null
+
     cleanupAudio()
 
-    const sessionId = sessionIdRef.current
-    if (!sessionId) {
+    const ws = wsRef.current
+    if (!ws || ws.readyState !== WebSocket.OPEN || !setupReadyRef.current) {
       finishWithText(finalTextRef.current)
       return
     }
 
-    void (async () => {
-      try {
-        const response = await fetch(`/api/transcribe/live/${sessionId}/stop`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ waitMs: 1500 }),
-        })
-        const data = await response.json().catch(() => null)
-        const text =
-          typeof data?.text === "string" && data.text.trim()
-            ? data.text
-            : finalTextRef.current
-        finishWithText(text)
-      } catch {
-        finishWithText(finalTextRef.current)
-      }
-    })()
+    try {
+      ws.send(JSON.stringify({ realtimeInput: { activityEnd: {} } }))
+    } catch {
+      finishWithText(finalTextRef.current)
+      return
+    }
+
+    finalizeTimerRef.current = setTimeout(() => {
+      finishWithText(finalTextRef.current || interimRef.current)
+    }, 2500)
   }, [cleanupAudio, finishWithText, phase])
 
   stopRef.current = stop
@@ -365,15 +442,6 @@ export function useVoiceDictation({
 
   const cancel = React.useCallback(() => {
     if (phase === "idle" || phase === "finalizing") return
-    const sessionId = sessionIdRef.current
-    if (sessionId) {
-      void fetch(`/api/transcribe/live/${sessionId}/stop`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ waitMs: 0 }),
-        keepalive: true,
-      }).catch(() => {})
-    }
     cleanupSession()
     setLiveText("")
     onPartialRef.current?.(null)

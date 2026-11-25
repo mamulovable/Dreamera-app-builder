@@ -2,8 +2,7 @@ import { randomUUID } from "node:crypto"
 import { NextResponse } from "next/server"
 
 import { AiProviderError } from "@/lib/ai/providers"
-import { liveTranscribeConfigured } from "@/lib/ai/live-transcribe"
-import { createLiveTranscribeSession } from "@/lib/ai/live-transcribe-sessions"
+import { createLiveTranscribeToken, liveTranscribeConfigured } from "@/lib/ai/live-transcribe"
 import { PlanLimitError, planLimitResponse, spendCredits, refundCredits } from "@/lib/billing/credits"
 import { AI_VOICE_CREDITS } from "@/lib/plans"
 import { getCurrentUser } from "@/lib/session"
@@ -14,8 +13,8 @@ function error(message: string, status: number, code?: string) {
 }
 
 /**
- * Starts a server-side Gemini Live transcription session for builder voice prompts.
- * The browser streams PCM to follow-up routes; the API key never leaves the server.
+ * Issues a short-lived Gemini Live token for realtime builder voice dictation.
+ * The browser streams PCM straight to Gemini; this route only authenticates + bills.
  */
 export async function POST(request: Request) {
   const user = await getCurrentUser().catch(() => null)
@@ -41,10 +40,12 @@ export async function POST(request: Request) {
   }
 
   try {
-    const session = await createLiveTranscribeSession(user.id, language)
+    const session = await createLiveTranscribeToken(language)
     return NextResponse.json({
-      sessionId: session.sessionId,
+      token: session.token,
+      wsUrl: session.wsUrl,
       model: session.model,
+      setup: session.setup,
       reference,
     })
   } catch (cause) {
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
       reference: `refund:${reference}`,
     }).catch(() => {})
     if (cause instanceof AiProviderError) return error(cause.message, cause.status)
-    console.error("Builder live voice session failed", cause)
+    console.error("Builder live voice token failed", cause)
     return error("Voice dictation isn't available right now.", 502)
   }
 }
