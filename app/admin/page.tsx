@@ -2,6 +2,13 @@ import Link from "next/link"
 
 import { FailBuildButton } from "@/components/admin/admin-actions"
 import {
+  ActivityAreaChart,
+  CreditsBarChart,
+  PlanDonutChart,
+  StatusDonutChart,
+} from "@/components/admin/overview-charts"
+import { TokenChart } from "@/components/admin/token-chart"
+import {
   AdminPageHeader,
   EmptyNote,
   Panel,
@@ -19,6 +26,11 @@ import { PLANS } from "@/lib/plans"
 export default async function AdminOverviewPage() {
   const [overview, aiToday, builder] = await Promise.all([getAdminOverview(), getAdminAiToday(), getAdminBuilderUsage()])
   const attentionCount = overview.activeBuilds + overview.failedProjects + overview.nativeInFlight + overview.cancelingPro
+  const activityTotal = overview.activityDays.reduce((sum, day) => sum + day.signups + day.projects, 0)
+  const creditsTotal = overview.activityDays.reduce((sum, day) => sum + day.credits, 0)
+  const tokenTotal = builder.days.reduce((sum, day) => sum + day.uncached + day.cached + day.output, 0)
+  const statusTotal = overview.projectStatus.reduce((sum, row) => sum + row.count, 0)
+  const planTotal = overview.plans.reduce((sum, row) => sum + row.count, 0)
 
   return (
     <div className="space-y-8">
@@ -27,7 +39,7 @@ export default async function AdminOverviewPage() {
         description={
           attentionCount > 0
             ? `${attentionCount.toLocaleString()} item${attentionCount === 1 ? "" : "s"} need attention right now.`
-            : "Quiet for now — today's activity and totals are below."
+            : "Quiet for now — charts and totals for the last 14 days are below."
         }
       />
 
@@ -63,6 +75,87 @@ export default async function AdminOverviewPage() {
             tone={overview.cancelingPro > 0 ? "warn" : "ok"}
           />
         </StatGrid>
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex items-end justify-between gap-3">
+          <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Charts · last 14 days</h2>
+          <span className="text-xs text-muted-foreground">UTC</span>
+        </div>
+
+        <Panel
+          title="Growth"
+          action={<span className="text-xs text-muted-foreground">Signups and new projects</span>}
+        >
+          {activityTotal === 0 ? (
+            <EmptyNote>No signups or projects in the last 14 days.</EmptyNote>
+          ) : (
+            <ActivityAreaChart days={overview.activityDays} />
+          )}
+        </Panel>
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Panel title="Credits spent" action={<span className="text-xs text-muted-foreground">Dreamera credits</span>}>
+            {creditsTotal === 0 ? (
+              <EmptyNote>No credits spent in the last 14 days.</EmptyNote>
+            ) : (
+              <CreditsBarChart days={overview.activityDays} />
+            )}
+          </Panel>
+
+          <Panel
+            title="Builder tokens"
+            action={
+              <Link href="/admin/builder" className="text-xs font-medium text-brand-dark hover:underline">
+                Open builder
+              </Link>
+            }
+          >
+            {tokenTotal === 0 ? (
+              <EmptyNote>No builder calls in the last 14 days.</EmptyNote>
+            ) : (
+              <TokenChart days={builder.days} />
+            )}
+          </Panel>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Panel title="Project status" action={<span className="text-xs text-muted-foreground">{statusTotal.toLocaleString()} projects</span>}>
+            {statusTotal === 0 ? (
+              <EmptyNote>No projects yet.</EmptyNote>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-center">
+                <StatusDonutChart rows={overview.projectStatus} />
+                <ul className="space-y-2 text-sm">
+                  {overview.projectStatus.map((row) => (
+                    <li key={row.key} className="flex items-center justify-between gap-6">
+                      <span className="text-muted-foreground">{row.label}</span>
+                      <span className="font-medium tabular-nums">{row.count.toLocaleString()}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </Panel>
+
+          <Panel title="Plans" action={<span className="text-xs text-muted-foreground">{planTotal.toLocaleString()} users</span>}>
+            {planTotal === 0 ? (
+              <EmptyNote>No users yet.</EmptyNote>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-center">
+                <PlanDonutChart rows={overview.plans} />
+                <ul className="space-y-2 text-sm">
+                  {overview.plans.map((row) => (
+                    <li key={row.key} className="flex items-center justify-between gap-6">
+                      <span className="text-muted-foreground">{row.label}</span>
+                      <span className="font-medium tabular-nums">{row.count.toLocaleString()}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </Panel>
+        </div>
       </section>
 
       <section className="space-y-3">

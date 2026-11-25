@@ -38,6 +38,7 @@ import {
   type User,
 } from "@/db"
 import { failBuild } from "@/lib/agent/builds"
+import { PLANS } from "@/lib/plans"
 import { PLATFORM_LABELS, STATUS_STYLES, type ProjectPlatform, type ProjectStatus } from "@/lib/projects"
 import { getCurrentUser, type SessionUser } from "@/lib/session"
 import { deleteObjects } from "@/lib/storage"
@@ -83,9 +84,28 @@ function daysAgoUtc(days: number) {
   return date
 }
 
+function utcDayKey(date: Date) {
+  return date.toISOString().slice(0, 10)
+}
+
+function utcDayLabel(iso: string) {
+  const [year, month, day] = iso.split("-").map(Number)
+  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  })
+}
+
+const OVERVIEW_CHART_DAYS = 14
+
 export async function getAdminOverview() {
   const since = startOfUtcDay()
   const weekAgo = daysAgoUtc(7)
+  const chartSince = daysAgoUtc(OVERVIEW_CHART_DAYS - 1)
+  const userDayKey = sql<string>`to_char((${users.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'UTC', 'YYYY-MM-DD')`
+  const projectDayKey = sql<string>`to_char((${projects.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'UTC', 'YYYY-MM-DD')`
+  const creditDayKey = sql<string>`to_char((${creditTransactions.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'UTC', 'YYYY-MM-DD')`
 
   const [
     [{ signupsToday }],
@@ -107,6 +127,11 @@ export async function getAdminOverview() {
     recentFailed,
     activeBuildRows,
     recentAudit,
+    signupDayRows,
+    projectDayRows,
+    creditDayRows,
+    statusRows,
+    planRows,
   ] = await Promise.all([
     db.select({ signupsToday: count() }).from(users).where(gte(users.createdAt, since)),
     db.select({ projectsToday: count() }).from(projects).where(gte(projects.createdAt, since)),
@@ -190,7 +215,57 @@ export async function getAdminOverview() {
       .innerJoin(users, eq(users.id, adminAuditLog.adminUserId))
       .orderBy(desc(adminAuditLog.createdAt))
       .limit(8),
+    db
+      .select({ day: userDayKey, count: count() })
+      .from(users)
+      .where(gte(users.createdAt, chartSince))
+      .groupBy(userDayKey),
+    db
+      .select({ day: projectDayKey, count: count() })
+      .from(projects)
+      .where(gte(projects.createdAt, chartSince))
+      .groupBy(projectDayKey),
+    db
+      .select({
+        day: creditDayKey,
+        spent: sql<number>`coalesce(sum(case when ${creditTransactions.amount} < 0 then -${creditTransactions.amount} else 0 end), 0)::int`,
+      })
+      .from(creditTransactions)
+      .where(gte(creditTransactions.createdAt, chartSince))
+      .groupBy(creditDayKey),
+    db
+      .select({ status: projects.status, count: count() })
+      .from(projects)
+      .groupBy(projects.status),
+    db.select({ plan: users.plan, count: count() }).from(users).groupBy(users.plan),
   ])
+
+  const signupsByDay = new Map(signupDayRows.map((row) => [row.day, row.count]))
+  const projectsByDay = new Map(projectDayRows.map((row) => [row.day, row.count]))
+  const creditsByDay = new Map(creditDayRows.map((row) => [row.day, row.spent]))
+  const activityDays = Array.from({ length: OVERVIEW_CHART_DAYS }, (_, index) => {
+    const date = daysAgoUtc(OVERVIEW_CHART_DAYS - 1 - index)
+    const key = utcDayKey(date)
+    return {
+      day: key,
+      label: utcDayLabel(key),
+      signups: signupsByDay.get(key) ?? 0,
+      projects: projectsByDay.get(key) ?? 0,
+      credits: creditsByDay.get(key) ?? 0,
+    }
+  })
+  const statusByKey = new Map(statusRows.map((row) => [row.status, row.count]))
+  const projectStatus = (["planning", "building", "ready", "failed"] as const).map((status) => ({
+    key: status,
+    label: STATUS_STYLES[status].label,
+    count: statusByKey.get(status) ?? 0,
+  }))
+  const planByKey = new Map(planRows.map((row) => [row.plan, row.count]))
+  const plans = (["free", "pro"] as const).map((plan) => ({
+    key: plan,
+    label: PLANS[plan].name,
+    count: planByKey.get(plan) ?? 0,
+  }))
 
   return {
     signupsToday,
@@ -214,6 +289,9 @@ export async function getAdminOverview() {
     recentFailed,
     activeBuildRows,
     recentAudit,
+    activityDays,
+    projectStatus,
+    plans,
   }
 }
 
@@ -263,24 +341,11 @@ export async function getAdminAiCalls() {
 
 const BUILDER_CHART_DAYS = 14
 
-function utcDayKey(date: Date) {
-  return date.toISOString().slice(0, 10)
-}
-
-function utcDayLabel(iso: string) {
-  const [year, month, day] = iso.split("-").map(Number)
-  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  })
-}
-
 export async function getAdminBuilderUsage() {
   const since = daysAgoUtc(BUILDER_CHART_DAYS - 1)
   const todayStart = startOfUtcDay()
   const dayKey = sql<string>`to_char((${builderCalls.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'UTC', 'YYYY-MM-DD')`
-  const [todayRows, dayRows, calls, apps] = await Promise.all([
+  const [todayRows, dayRows, calls, tokenRows, modelTokenRows, projectRows] = await Promise.all([
     db
       .select({
         calls: count(),
@@ -307,16 +372,79 @@ export async function getAdminBuilderUsage() {
         projectId: builderCalls.projectId,
         title: sql<string>`max(${builderCalls.projectTitle})`,
         userEmail: sql<string>`max(${builderCalls.userEmail})`,
+        lastCallAt: sql<Date | null>`max(${builderCalls.createdAt})`,
         calls: count(),
         inputTokens: sql<number>`coalesce(sum(${builderCalls.inputTokens}), 0)::int`,
         outputTokens: sql<number>`coalesce(sum(${builderCalls.outputTokens}), 0)::int`,
         totalTokens: sql<number>`coalesce(sum(${builderCalls.totalTokens}), 0)::int`,
       })
       .from(builderCalls)
-      .groupBy(builderCalls.projectId)
-      .orderBy(desc(sql`coalesce(sum(${builderCalls.totalTokens}), 0)`))
-      .limit(12),
+      .groupBy(builderCalls.projectId),
+    db
+      .select({
+        projectId: builderCalls.projectId,
+        model: builderCalls.model,
+        inputTokens: sql<number>`coalesce(sum(${builderCalls.inputTokens}), 0)::int`,
+        outputTokens: sql<number>`coalesce(sum(${builderCalls.outputTokens}), 0)::int`,
+      })
+      .from(builderCalls)
+      .groupBy(builderCalls.projectId, builderCalls.model),
+    db
+      .select({
+        id: projects.id,
+        title: projects.title,
+        userEmail: users.email,
+        createdAt: projects.createdAt,
+        updatedAt: projects.updatedAt,
+      })
+      .from(projects)
+      .innerJoin(users, eq(users.id, projects.userId)),
   ])
+  const tokensByProject = new Map(tokenRows.flatMap((row) => (row.projectId ? [[row.projectId, row] as const] : [])))
+  const modelsByProject = new Map<string | null, { model: string; inputTokens: number; outputTokens: number }[]>()
+  for (const row of modelTokenRows) {
+    const key = row.projectId
+    const list = modelsByProject.get(key) ?? []
+    list.push({ model: row.model, inputTokens: row.inputTokens, outputTokens: row.outputTokens })
+    modelsByProject.set(key, list)
+  }
+  const modelsUsed = [...new Set(modelTokenRows.map((row) => row.model).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b)
+  )
+  const listedProjectIds = new Set(projectRows.map((project) => project.id))
+  const apps = [
+    ...projectRows.map((project) => {
+      const tokens = tokensByProject.get(project.id)
+      return {
+        projectId: project.id,
+        title: project.title,
+        userEmail: project.userEmail,
+        createdAt: project.createdAt,
+        updatedAt: project.updatedAt,
+        lastCallAt: tokens?.lastCallAt ?? null,
+        calls: Number(tokens?.calls ?? 0),
+        inputTokens: tokens?.inputTokens ?? 0,
+        outputTokens: tokens?.outputTokens ?? 0,
+        totalTokens: tokens?.totalTokens ?? 0,
+        byModel: modelsByProject.get(project.id) ?? [],
+      }
+    }),
+    ...tokenRows
+      .filter((row) => !row.projectId || !listedProjectIds.has(row.projectId))
+      .map((row) => ({
+        projectId: row.projectId,
+        title: row.title,
+        userEmail: row.userEmail,
+        createdAt: null as Date | null,
+        updatedAt: null as Date | null,
+        lastCallAt: row.lastCallAt ?? null,
+        calls: Number(row.calls),
+        inputTokens: row.inputTokens,
+        outputTokens: row.outputTokens,
+        totalTokens: row.totalTokens,
+        byModel: modelsByProject.get(row.projectId) ?? [],
+      })),
+  ]
   const today = todayRows[0]
   const byDay = new Map(dayRows.map((row) => [row.day, row]))
   const days = Array.from({ length: BUILDER_CHART_DAYS }, (_, index) => {
@@ -344,24 +472,37 @@ export async function getAdminBuilderUsage() {
     days,
     calls,
     apps,
+    modelsUsed,
   }
 }
 
 export async function getProjectBuilderTokens(projectId: string) {
-  const [row] = await db
-    .select({
-      calls: count(),
-      inputTokens: sql<number>`coalesce(sum(${builderCalls.inputTokens}), 0)::int`,
-      outputTokens: sql<number>`coalesce(sum(${builderCalls.outputTokens}), 0)::int`,
-      totalTokens: sql<number>`coalesce(sum(${builderCalls.totalTokens}), 0)::int`,
-    })
-    .from(builderCalls)
-    .where(eq(builderCalls.projectId, projectId))
+  const [[row], byModel] = await Promise.all([
+    db
+      .select({
+        calls: count(),
+        inputTokens: sql<number>`coalesce(sum(${builderCalls.inputTokens}), 0)::int`,
+        outputTokens: sql<number>`coalesce(sum(${builderCalls.outputTokens}), 0)::int`,
+        totalTokens: sql<number>`coalesce(sum(${builderCalls.totalTokens}), 0)::int`,
+      })
+      .from(builderCalls)
+      .where(eq(builderCalls.projectId, projectId)),
+    db
+      .select({
+        model: builderCalls.model,
+        inputTokens: sql<number>`coalesce(sum(${builderCalls.inputTokens}), 0)::int`,
+        outputTokens: sql<number>`coalesce(sum(${builderCalls.outputTokens}), 0)::int`,
+      })
+      .from(builderCalls)
+      .where(eq(builderCalls.projectId, projectId))
+      .groupBy(builderCalls.model),
+  ])
   return {
     calls: row?.calls ?? 0,
     inputTokens: row?.inputTokens ?? 0,
     outputTokens: row?.outputTokens ?? 0,
     totalTokens: row?.totalTokens ?? 0,
+    byModel,
   }
 }
 
@@ -487,7 +628,31 @@ export async function searchAdminProjects(filters: ProjectFilters) {
     .orderBy(desc(projects.updatedAt))
     .limit(100)
 
-  return rows
+  if (rows.length === 0) return rows.map((row) => ({ ...row, byModel: [] as { model: string; inputTokens: number; outputTokens: number }[] }))
+
+  const modelRows = await db
+    .select({
+      projectId: builderCalls.projectId,
+      model: builderCalls.model,
+      inputTokens: sql<number>`coalesce(sum(${builderCalls.inputTokens}), 0)::int`,
+      outputTokens: sql<number>`coalesce(sum(${builderCalls.outputTokens}), 0)::int`,
+    })
+    .from(builderCalls)
+    .where(inArray(builderCalls.projectId, rows.map((row) => row.id)))
+    .groupBy(builderCalls.projectId, builderCalls.model)
+
+  const modelsByProject = new Map<string, { model: string; inputTokens: number; outputTokens: number }[]>()
+  for (const row of modelRows) {
+    if (!row.projectId) continue
+    const list = modelsByProject.get(row.projectId) ?? []
+    list.push({ model: row.model, inputTokens: row.inputTokens, outputTokens: row.outputTokens })
+    modelsByProject.set(row.projectId, list)
+  }
+
+  return rows.map((row) => ({
+    ...row,
+    byModel: modelsByProject.get(row.id) ?? [],
+  }))
 }
 
 export async function getAdminProject(projectId: string) {

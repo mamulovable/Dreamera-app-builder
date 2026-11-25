@@ -3,14 +3,31 @@ import { notFound } from "next/navigation"
 
 import { DeleteProjectButton, SetPublicButton } from "@/components/admin/admin-actions"
 import { AdminPageHeader, DataTable, EmptyNote, Panel, StatusBadge, formatWhen } from "@/components/admin/admin-ui"
+import { defaultTokenPrice, readBuilderRoute } from "@/lib/agent/provider-settings"
 import { getAdminProject, getProjectBuilderTokens, PLATFORM_LABELS, STATUS_STYLES } from "@/lib/admin"
+import { appBuildCostFromModels, formatNgn, formatUsd } from "@/lib/token-cost"
 
 type Props = { params: Promise<{ projectId: string }> }
 
 export default async function AdminProjectDetailPage({ params }: Props) {
   const { projectId } = await params
-  const [detail, tokens] = await Promise.all([getAdminProject(projectId), getProjectBuilderTokens(projectId)])
+  const [detail, tokens, route] = await Promise.all([
+    getAdminProject(projectId),
+    getProjectBuilderTokens(projectId),
+    readBuilderRoute(),
+  ])
   if (!detail) notFound()
+  const cost = appBuildCostFromModels(
+    tokens.byModel.length > 0
+      ? tokens.byModel
+      : [{ model: "_", inputTokens: tokens.inputTokens, outputTokens: tokens.outputTokens }],
+    route.modelPrices,
+    defaultTokenPrice(route)
+  )
+  const pricesUnset =
+    route.inputPricePerMillion === 0 &&
+    route.outputPricePerMillion === 0 &&
+    Object.keys(route.modelPrices).length === 0
 
   const { project, ownerEmail, ownerName, ownerId, screens, shareCount, backend, github, appBuilds, webPublish, activeBuild } =
     detail
@@ -63,6 +80,29 @@ export default async function AdminProjectDetailPage({ params }: Props) {
                   {" "}
                   · {tokens.inputTokens.toLocaleString()} in · {tokens.outputTokens.toLocaleString()} out · {tokens.calls.toLocaleString()} calls
                 </span>
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Build cost</dt>
+              <dd className="font-medium tabular-nums">
+                {formatUsd(cost.build)}
+                {pricesUnset ? (
+                  <span className="font-normal text-muted-foreground"> · set token prices on the Builder page</span>
+                ) : null}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">App cost</dt>
+              <dd className="font-medium tabular-nums">
+                {formatUsd(cost.app)}
+                <span className="font-normal text-muted-foreground"> · build cost × 2</span>
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">App cost (NGN)</dt>
+              <dd className="font-medium tabular-nums">
+                {formatNgn(cost.app)}
+                <span className="font-normal text-muted-foreground"> · ₦1,500 per USD</span>
               </dd>
             </div>
             <div>

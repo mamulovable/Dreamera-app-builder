@@ -5,8 +5,10 @@ import {
   AI_PROVIDER_LABELS,
   isAiProviderName,
   optionalModel,
+  parseModelPrices,
   providerReady,
   saveBuilderSettings,
+  tokenPricePerMillion,
   type AiProviderName,
 } from "@/lib/agent/provider-settings"
 import { AdminActionError, adminActionResponse, requireAdminApi } from "@/lib/admin"
@@ -39,6 +41,9 @@ export async function POST(request: Request) {
       geminiBuilderModel: optionalModel(body?.geminiBuilderModel),
       openrouterPlannerModel: optionalModel(body?.openrouterPlannerModel),
       openrouterBuilderModel: optionalModel(body?.openrouterBuilderModel),
+      inputPricePerMillion: tokenPricePerMillion(body?.inputPricePerMillion),
+      outputPricePerMillion: tokenPricePerMillion(body?.outputPricePerMillion),
+      modelPrices: parseModelPrices(body?.modelPrices),
       updatedBy: auth.user.id,
     })
     await db.insert(adminAuditLog).values({
@@ -50,11 +55,19 @@ export async function POST(request: Request) {
         plannerModel: route.plannerModel,
         builderModel: route.builderModel,
         fallback: route.fallback,
+        inputPricePerMillion: route.inputPricePerMillion,
+        outputPricePerMillion: route.outputPricePerMillion,
+        modelPrices: route.modelPrices,
       },
     })
     return NextResponse.json(route)
   } catch (error) {
-    if (error instanceof Error && error.message.includes("model id")) {
+    if (
+      error instanceof Error &&
+      (error.message.includes("model id") ||
+        error.message.includes("Token prices") ||
+        error.message.includes("model price"))
+    ) {
       return adminActionResponse(new AdminActionError(error.message))
     }
     return adminActionResponse(error)

@@ -3,8 +3,10 @@ import Link from "next/link"
 import { AdminPageHeader, DataTable, EmptyNote, RowLink, StatusBadge, formatWhen } from "@/components/admin/admin-ui"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { defaultTokenPrice, readBuilderRoute } from "@/lib/agent/provider-settings"
 import { PLATFORM_LABELS, STATUS_STYLES, searchAdminProjects } from "@/lib/admin"
 import { PROJECT_PLATFORMS, PROJECT_STATUSES, type ProjectPlatform, type ProjectStatus } from "@/lib/projects"
+import { appBuildCostFromModels, formatNgn, formatUsd } from "@/lib/token-cost"
 
 type Props = {
   searchParams: Promise<{ status?: string; platform?: string; public?: string; owner?: string }>
@@ -24,11 +26,18 @@ export default async function AdminProjectsPage({ searchParams }: Props) {
   const platform = asPlatform(params.platform)
   const isPublic = params.public === "1" ? true : params.public === "0" ? false : null
   const owner = params.owner ?? null
-  const rows = await searchAdminProjects({ status, platform, isPublic, owner })
+  const [rows, route] = await Promise.all([
+    searchAdminProjects({ status, platform, isPublic, owner }),
+    readBuilderRoute(),
+  ])
+  const fallbackPrice = defaultTokenPrice(route)
 
   return (
     <div className="space-y-6">
-      <AdminPageHeader title="Projects" description="Filter by status, platform, visibility, or owner." />
+      <AdminPageHeader
+        title="Projects"
+        description="Filter by status, platform, visibility, or owner. Build and app costs use each model's token price."
+      />
 
       <form className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5" action="/admin/projects" method="get">
         <select name="status" defaultValue={status ?? ""} className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm">
@@ -61,26 +70,32 @@ export default async function AdminProjectsPage({ searchParams }: Props) {
       {rows.length === 0 ? (
         <EmptyNote>No projects match those filters.</EmptyNote>
       ) : (
-        <DataTable headers={["Project", "Owner", "Status", "Platform", "Updated"]}>
-          {rows.map((row) => (
-            <tr key={row.id}>
-              <td className="px-3 py-2.5">
-                <RowLink href={`/admin/projects/${row.id}`}>{row.title}</RowLink>
-                {row.isPublic ? <span className="ml-2 text-xs text-brand-dark">public</span> : null}
-                <p className="line-clamp-1 text-xs text-muted-foreground">{row.prompt}</p>
-              </td>
-              <td className="px-3 py-2.5">
-                <Link href={`/admin/users/${row.ownerId}`} className="hover:underline">
-                  {row.ownerEmail}
-                </Link>
-              </td>
-              <td className="px-3 py-2.5">
-                <StatusBadge label={STATUS_STYLES[row.status].label} />
-              </td>
-              <td className="px-3 py-2.5">{PLATFORM_LABELS[row.platform]}</td>
-              <td className="px-3 py-2.5 text-muted-foreground">{formatWhen(row.updatedAt)}</td>
-            </tr>
-          ))}
+        <DataTable headers={["Project", "Owner", "Status", "Platform", "Build cost", "App cost", "App cost (NGN)", "Updated"]}>
+          {rows.map((row) => {
+            const cost = appBuildCostFromModels(row.byModel, route.modelPrices, fallbackPrice)
+            return (
+              <tr key={row.id}>
+                <td className="px-3 py-2.5">
+                  <RowLink href={`/admin/projects/${row.id}`}>{row.title}</RowLink>
+                  {row.isPublic ? <span className="ml-2 text-xs text-brand-dark">public</span> : null}
+                  <p className="line-clamp-1 text-xs text-muted-foreground">{row.prompt}</p>
+                </td>
+                <td className="px-3 py-2.5">
+                  <Link href={`/admin/users/${row.ownerId}`} className="hover:underline">
+                    {row.ownerEmail}
+                  </Link>
+                </td>
+                <td className="px-3 py-2.5">
+                  <StatusBadge label={STATUS_STYLES[row.status].label} />
+                </td>
+                <td className="px-3 py-2.5">{PLATFORM_LABELS[row.platform]}</td>
+                <td className="px-3 py-2.5 tabular-nums">{formatUsd(cost.build)}</td>
+                <td className="px-3 py-2.5 font-medium tabular-nums">{formatUsd(cost.app)}</td>
+                <td className="px-3 py-2.5 font-medium tabular-nums">{formatNgn(cost.app)}</td>
+                <td className="px-3 py-2.5 text-muted-foreground">{formatWhen(row.updatedAt)}</td>
+              </tr>
+            )
+          })}
         </DataTable>
       )}
     </div>

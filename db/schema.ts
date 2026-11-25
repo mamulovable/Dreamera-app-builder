@@ -502,6 +502,15 @@ export const builderSettings = pgTable("builder_settings", {
   geminiBuilderModel: text("gemini_builder_model"),
   openrouterPlannerModel: text("openrouter_planner_model"),
   openrouterBuilderModel: text("openrouter_builder_model"),
+  /** Fallback USD per 1 million input tokens when a model has no row in modelPrices. */
+  inputPricePerMillion: doublePrecision("input_price_per_million").default(0).notNull(),
+  /** Fallback USD per 1 million output tokens when a model has no row in modelPrices. */
+  outputPricePerMillion: doublePrecision("output_price_per_million").default(0).notNull(),
+  /** Per-model USD prices: { [modelId]: { input, output } } for 1 million tokens each. */
+  modelPrices: jsonb("model_prices")
+    .$type<Record<string, { input: number; output: number }>>()
+    .default({})
+    .notNull(),
   updatedBy: integer("updated_by").references(() => users.id, { onDelete: "set null" }),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
