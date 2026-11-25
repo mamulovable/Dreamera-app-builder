@@ -1,6 +1,7 @@
 "use client"
 
 import { ClosingCta, HeroIntro, StorySections } from "@/components/home/landing-sections"
+import { HeroWorkspaceMockup } from "@/components/home/hero-workspace-mockup"
 import { ProjectsSection } from "@/components/home/projects-section"
 import { PromptComposer } from "@/components/home/prompt-composer"
 import { SiteFooter } from "@/components/home/site-footer"
@@ -30,9 +31,10 @@ export function HomeContent() {
           <div id="composer" className="mx-auto mt-12 w-full max-w-3xl scroll-mt-28">
             <PromptComposer />
           </div>
+          <HeroWorkspaceMockup />
         </section>
 
-        <div className="pt-16 pb-24 sm:pt-24">
+        <div className="pt-20 pb-24 sm:pt-28">
           <StorySections />
         </div>
 

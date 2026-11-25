@@ -398,18 +398,18 @@ export function PromptComposer() {
         {/* Soft glow behind the composer */}
         <div
           aria-hidden
-          className="absolute -inset-3 rounded-[2.75rem] bg-linear-to-r from-brand/30 via-brand-accent/20 to-brand/20 opacity-60 blur-2xl transition-opacity duration-500 group-focus-within/composer:opacity-100"
+          className="absolute -inset-4 rounded-[2.75rem] bg-linear-to-r from-brand/25 via-brand-accent/15 to-brand/20 opacity-70 blur-3xl transition-opacity duration-500 group-focus-within/composer:opacity-100"
         />
         <form
           onSubmit={handleSubmit}
           {...dragHandlers}
           aria-busy={isSubmitting}
           className={cn(
-            "relative rounded-[2.25rem] bg-linear-to-br from-brand/40 via-white to-brand-accent/40 p-px shadow-[0_24px_60px_-20px_rgba(76,29,149,0.35)] transition-[background,box-shadow] focus-within:from-brand focus-within:to-brand-accent",
-            isDragging && "from-brand to-brand"
+            "relative rounded-[2.25rem] border border-white/80 bg-white/55 p-px shadow-[0_28px_70px_-24px_rgba(76,29,149,0.4)] ring-1 ring-black/[0.03] backdrop-blur-xl transition-[box-shadow,background] focus-within:border-brand/40 focus-within:shadow-[0_28px_70px_-20px_rgba(124,58,237,0.45)]",
+            isDragging && "border-brand/50 ring-brand/20"
           )}
         >
-          <div className="relative rounded-[calc(2.25rem-1px)] bg-white/90 p-2.5 backdrop-blur-xl">
+          <div className="relative rounded-[calc(2.25rem-1px)] bg-white/80 p-2.5 backdrop-blur-xl">
             {isDragging && (
               <div className="pointer-events-none absolute inset-1.5 z-10 flex flex-col items-center justify-center gap-2 rounded-[2rem] border-2 border-dashed border-brand/30 bg-brand/5 text-brand-dark">
                 <UploadCloudIcon className="size-7" />

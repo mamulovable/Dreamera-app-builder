@@ -44,8 +44,8 @@ export function SiteHeader() {
   const navLinks = user ? NAV_LINKS.filter((link) => link.href === "/pricing") : NAV_LINKS
 
   return (
-    <header className="sticky top-0 z-40 px-3 pt-3 sm:px-6 sm:pt-4">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 rounded-full border border-white/60 bg-white/65 pr-2 pl-3 shadow-[0_8px_32px_-12px_rgba(76,29,149,0.25)] ring-1 ring-black/[0.03] backdrop-blur-xl sm:pl-4">
+    <header className="sticky top-0 z-40 border-b border-black/[0.04] bg-background/70 px-3 backdrop-blur-xl sm:px-6">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4">
         <div className="flex items-center gap-8">
           <Link href="/" aria-label="Dreamera home">
             <Logo className="size-8 rounded-full" />
@@ -83,7 +83,7 @@ export function SiteHeader() {
               </Button>
               <Button
                 size="lg"
-                className="h-10 rounded-full bg-brand px-5 text-white shadow-md shadow-brand/30 transition-transform hover:scale-[1.03] hover:opacity-95"
+                className="h-10 rounded-full bg-foreground px-5 text-background shadow-md shadow-black/10 transition-transform hover:scale-[1.03] hover:bg-foreground/90"
                 nativeButton={false}
                 render={<Link href="/#composer" />}
               >
