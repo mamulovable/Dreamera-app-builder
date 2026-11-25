@@ -14,7 +14,8 @@ function error(message: string, status: number, code?: string) {
 }
 
 /**
- * Transcribes a short voice note for the builder prompt boxes (home + workspace).
+ * Batch speech-to-text for generated apps (file upload).
+ * Builder prompt boxes use `/api/transcribe/live` (Gemini Live) instead.
  * Uses Groq Whisper. Optional `language` is an ISO-639-1 code, or "auto".
  */
 export async function POST(request: Request) {

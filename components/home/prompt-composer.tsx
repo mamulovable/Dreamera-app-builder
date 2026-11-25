@@ -141,6 +141,8 @@ export function PromptComposer() {
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const dragDepth = React.useRef(0)
+  /** Prompt text before the current live dictation session. */
+  const dictationBaseRef = React.useRef<string | null>(null)
 
   // Revoke any remaining object URLs on unmount.
   const filesRef = React.useRef(files)
@@ -334,13 +336,31 @@ export function PromptComposer() {
     })
   }
 
+  function combineDictation(base: string, spoken: string) {
+    const trimmedBase = base.trim()
+    const trimmedSpoken = spoken.trim()
+    if (!trimmedSpoken) return trimmedBase.slice(0, MAX_PROMPT_LENGTH)
+    const next = trimmedBase ? `${trimmedBase} ${trimmedSpoken}` : trimmedSpoken
+    return next.slice(0, MAX_PROMPT_LENGTH)
+  }
+
+  function applyLiveTranscript(text: string | null) {
+    if (isSubmitting) return
+    if (text === null) {
+      dictationBaseRef.current = null
+      return
+    }
+    if (dictationBaseRef.current === null) {
+      dictationBaseRef.current = textareaRef.current?.value ?? prompt
+    }
+    setPrompt(combineDictation(dictationBaseRef.current, text))
+  }
+
   function applyTranscript(text: string) {
     if (isSubmitting) return
-    setPrompt((prev) => {
-      const trimmed = prev.trim()
-      const next = trimmed ? `${trimmed} ${text}` : text
-      return next.slice(0, MAX_PROMPT_LENGTH)
-    })
+    const base = dictationBaseRef.current ?? textareaRef.current?.value ?? prompt
+    dictationBaseRef.current = null
+    setPrompt(combineDictation(base, text))
     requestAnimationFrame(() => {
       const el = textareaRef.current
       if (!el) return
@@ -552,6 +572,7 @@ export function PromptComposer() {
 
                 <VoiceDictationControls
                   disabled={isSubmitting || isSessionPending}
+                  onPartial={applyLiveTranscript}
                   onTranscript={applyTranscript}
                   onCharged={() => void refreshAccount()}
                   onNeedAuth={() =>

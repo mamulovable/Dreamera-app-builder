@@ -1,4 +1,4 @@
-// Languages for builder voice dictation (Whisper ISO-639-1 codes).
+// Languages for builder voice dictation (ISO-639-1 UI codes → Gemini BCP-47 on the server).
 
 export const VOICE_LANGUAGES = [
   { code: "auto", label: "Auto-detect" },

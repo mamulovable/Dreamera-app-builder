@@ -10,7 +10,6 @@ import {
   type VoiceLanguageCode,
 } from "@/lib/voice"
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,12 +37,13 @@ function readStoredLanguage(): VoiceLanguageCode {
 }
 
 /**
- * Compact mic control: tap to dictate, chevron opens language options.
- * Keeps speech + language as one toolbar unit instead of two pills.
+ * Compact mic control: tap to dictate in realtime, chevron opens language options.
+ * Live partials stream into the prompt via onPartial; onTranscript commits the final text.
  */
 export function VoiceDictationControls({
   disabled,
   size = "default",
+  onPartial,
   onTranscript,
   onNeedAuth,
   onCharged,
@@ -51,6 +51,8 @@ export function VoiceDictationControls({
 }: {
   disabled?: boolean
   size?: "default" | "sm"
+  /** Live session text while recording; `null` when the session ends. */
+  onPartial?: (text: string | null) => void
   onTranscript: (text: string) => void
   onNeedAuth?: () => void
   onCharged?: () => void
@@ -64,6 +66,7 @@ export function VoiceDictationControls({
   const voice = useVoiceDictation({
     language,
     disabled,
+    onPartial,
     onTranscript,
     onNeedAuth,
     onCharged,
@@ -93,18 +96,20 @@ export function VoiceDictationControls({
       >
         <button
           type="button"
-          disabled={disabled || voice.busy}
+          disabled={disabled || voice.phase === "finalizing"}
           onClick={voice.toggle}
           aria-label={
             voice.recording
               ? "Stop recording"
-              : voice.busy
-                ? "Transcribing"
-                : `Dictate with your voice (${voiceLanguageLabel(language)})`
+              : voice.phase === "connecting"
+                ? "Connecting"
+                : voice.phase === "finalizing"
+                  ? "Finishing transcription"
+                  : `Dictate with your voice (${voiceLanguageLabel(language)})`
           }
           title={
             voice.recording
-              ? `Recording… tap to stop (${voice.elapsed}s)`
+              ? `Listening… tap to stop (${voice.elapsed}s)`
               : `Speak your prompt · ${voiceLanguageLabel(language)}`
           }
           className={cn(
@@ -113,7 +118,7 @@ export function VoiceDictationControls({
             voice.recording && "text-red-700 hover:text-red-800"
           )}
         >
-          {voice.busy ? (
+          {voice.busy && !voice.recording ? (
             <Spinner className="size-4" />
           ) : voice.recording ? (
             <>

@@ -64,9 +64,15 @@ function groqKey() {
   return process.env.GROQ_API_KEY?.trim() || ""
 }
 
+function geminiKey() {
+  return process.env.GOOGLE_AI_API_KEY?.trim() || process.env.GEMINI_API_KEY?.trim() || ""
+}
+
 export function aiProvidersConfigured() {
-  const ready = Boolean(groqKey())
-  return { text: ready, voice: ready, speech: ready, vision: ready }
+  const groq = Boolean(groqKey())
+  // Builder voice prompts use Gemini Live; in-app STT still goes through Groq when set.
+  const voice = Boolean(geminiKey()) || groq
+  return { text: groq, voice, speech: groq, vision: groq }
 }
 
 /** Drops a reasoning trace if one is still wrapped in the answer. */

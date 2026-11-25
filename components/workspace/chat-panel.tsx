@@ -113,6 +113,7 @@ export function ChatPanel({
   const [newSessionOpen, setNewSessionOpen] = React.useState(false)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const dragDepth = React.useRef(0)
+  const dictationBaseRef = React.useRef<string | null>(null)
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const following = React.useRef(true)
   const { messages, status, busy, activity, streamingText, reasoning, error, screens, send, startNewSession, sessionRestarted } = agent
@@ -714,10 +715,25 @@ export function ChatPanel({
                   size="sm"
                   disabled={inputLocked}
                   onCharged={() => void refreshAccount()}
+                  onPartial={(text) => {
+                    if (text === null) {
+                      dictationBaseRef.current = null
+                      return
+                    }
+                    setDraft((prev) => {
+                      if (dictationBaseRef.current === null) dictationBaseRef.current = prev
+                      const base = dictationBaseRef.current.trim()
+                      const spoken = text.trim()
+                      const next = !spoken ? base : base ? `${base} ${spoken}` : spoken
+                      return next.slice(0, MAX_PROMPT_LENGTH)
+                    })
+                  }}
                   onTranscript={(text) => {
                     setDraft((prev) => {
-                      const trimmed = prev.trim()
-                      const next = trimmed ? `${trimmed} ${text}` : text
+                      const base = (dictationBaseRef.current ?? prev).trim()
+                      dictationBaseRef.current = null
+                      const spoken = text.trim()
+                      const next = !spoken ? base : base ? `${base} ${spoken}` : spoken
                       return next.slice(0, MAX_PROMPT_LENGTH)
                     })
                   }}
