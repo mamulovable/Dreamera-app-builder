@@ -330,7 +330,8 @@ export type AuthUser = { id: string; email: string; name: string };
 export interface Auth {
   getUser(): Promise<AuthUser | null>;
   signIn(email: string, password: string): Promise<AuthUser>;
-  signUp(email: string, password: string, name: string): Promise<AuthUser>;
+  /** Name is optional; when omitted the email local-part is used. */
+  signUp(email: string, password: string, name?: string): Promise<AuthUser>;
   signOut(): Promise<void>;
   subscribe(listener: (user: AuthUser | null) => void): () => void;
 }
@@ -709,12 +710,20 @@ export function createCloudHikeProvider(config: CloudHikeConfig): BackendProvide
       return stored ? (JSON.parse(stored) as AuthUser) : null;
     },
     async signIn(email, password) {
-      const { token, user } = await authRequest("/sign-in/email", { method: "POST", body: { email: email.trim(), password } });
+      const trimmedEmail = String(email ?? "").trim();
+      const { token, user } = await authRequest("/sign-in/email", { method: "POST", body: { email: trimmedEmail, password } });
       await setSession(token, toUser(user));
       return toUser(user);
     },
     async signUp(email, password, name) {
-      const { token, user } = await authRequest("/sign-up/email", { method: "POST", body: { name: name.trim(), email: email.trim(), password } });
+      // Screens often omit name (email + password only). CloudHike still needs a
+      // non-empty name, so fall back to the email local-part like local auth does.
+      const trimmedEmail = String(email ?? "").trim();
+      const trimmedName = String(name ?? "").trim() || trimmedEmail.split("@")[0] || "User";
+      const { token, user } = await authRequest("/sign-up/email", {
+        method: "POST",
+        body: { name: trimmedName, email: trimmedEmail, password },
+      });
       await setSession(token, toUser(user));
       return toUser(user);
     },
