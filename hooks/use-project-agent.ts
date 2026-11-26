@@ -33,6 +33,8 @@ export type AgentState = {
   error: string | null
   /** True once a new session started here, which took the first prompt out of the chat. */
   sessionRestarted: boolean
+  /** Latest external API key the agent asked the person to paste in the secrets dialog. */
+  secretRequest: { name: string; label: string } | null
 }
 
 type Action =
@@ -47,6 +49,7 @@ type Action =
   | { type: "new-session" }
   | { type: "file-code"; path: string; code: string }
   | { type: "rename"; name: string }
+  | { type: "clear-secret-request" }
 
 function reducer(state: AgentState, action: Action): AgentState {
   switch (action.type) {
@@ -95,6 +98,8 @@ function reducer(state: AgentState, action: Action): AgentState {
         ...state,
         plan: state.plan ? { ...state.plan, appName: action.name } : state.plan,
       }
+    case "clear-secret-request":
+      return { ...state, secretRequest: null }
   }
 }
 
@@ -125,6 +130,8 @@ function applyEvent(state: AgentState, event: AgentEvent): AgentState {
       return { ...state, plan: event.plan }
     case "backend":
       return { ...state, backend: event.backend }
+    case "secret-request":
+      return { ...state, secretRequest: { name: event.name, label: event.label } }
     case "project-status":
       return { ...state, status: event.status }
     case "screens":
@@ -193,6 +200,7 @@ export function useProjectAgent(
     reasoning: "",
     error: null,
     sessionRestarted: false,
+    secretRequest: null,
   })
   const busyRef = React.useRef(false)
   const openUpgrade = useUpgradeDialog()
@@ -325,5 +333,7 @@ export function useProjectAgent(
   /** Keeps the workspace title in sync after a rename. */
   const setAppName = React.useCallback((name: string) => dispatch({ type: "rename", name }), [])
 
-  return { ...state, send, setTheme, changeBackend, startNewSession, setFileCode, setAppName }
+  const clearSecretRequest = React.useCallback(() => dispatch({ type: "clear-secret-request" }), [])
+
+  return { ...state, send, setTheme, changeBackend, startNewSession, setFileCode, setAppName, clearSecretRequest }
 }

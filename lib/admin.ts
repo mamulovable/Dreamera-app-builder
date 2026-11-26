@@ -31,6 +31,7 @@ import {
   projectBackends,
   projectGithubRepos,
   projects,
+  projectSecrets,
   projectShares,
   screens,
   users,
@@ -39,6 +40,7 @@ import {
 } from "@/db"
 import { failBuild } from "@/lib/agent/builds"
 import { PLANS } from "@/lib/plans"
+import { deleteSecret, normalizeSecretName } from "@/lib/project-secrets"
 import { PLATFORM_LABELS, STATUS_STYLES, type ProjectPlatform, type ProjectStatus } from "@/lib/projects"
 import { getCurrentUser, type SessionUser } from "@/lib/session"
 import { deleteObjects } from "@/lib/storage"
@@ -668,7 +670,7 @@ export async function getAdminProject(projectId: string) {
     .where(eq(projects.id, projectId))
   if (!row) return null
 
-  const [screenRows, [{ shareCount }], backend, github, publish, web, active] = await Promise.all([
+  const [screenRows, [{ shareCount }], backend, github, publish, web, active, secrets] = await Promise.all([
     db
       .select({
         id: screens.id,
@@ -691,6 +693,16 @@ export async function getAdminProject(projectId: string) {
     db.select().from(appBuilds).where(eq(appBuilds.projectId, projectId)).orderBy(desc(appBuilds.createdAt)).limit(5),
     db.select().from(webPublishes).where(eq(webPublishes.projectId, projectId)).limit(1),
     db.select().from(builds).where(and(eq(builds.projectId, projectId), eq(builds.status, "active"))).limit(1),
+    // Names only — never select sealed values into admin UI.
+    db
+      .select({
+        name: projectSecrets.name,
+        label: projectSecrets.label,
+        updatedAt: projectSecrets.updatedAt,
+      })
+      .from(projectSecrets)
+      .where(eq(projectSecrets.projectId, projectId))
+      .orderBy(asc(projectSecrets.name)),
   ])
 
   return {
@@ -702,7 +714,29 @@ export async function getAdminProject(projectId: string) {
     appBuilds: publish,
     webPublish: web[0] ?? null,
     activeBuild: active[0] ?? null,
+    secrets,
   }
+}
+
+export async function adminDeleteSecret(admin: Pick<User, "id">, projectId: string, nameInput: string) {
+  const name = normalizeSecretName(nameInput)
+  if (!name) throw new AdminActionError("Invalid API key name.", 400)
+
+  const [project] = await db.select().from(projects).where(eq(projects.id, projectId))
+  if (!project) throw new AdminActionError("Project not found.", 404)
+
+  const removed = await deleteSecret(projectId, name)
+  if (!removed) throw new AdminActionError("That API key wasn't found.", 404)
+
+  await db.insert(adminAuditLog).values({
+    adminUserId: admin.id,
+    action: "delete-secret",
+    targetUserId: project.userId,
+    targetProjectId: projectId,
+    detail: { name, title: project.title },
+  })
+
+  return { ok: true as const, name }
 }
 
 export async function listPublicAdminProjects() {

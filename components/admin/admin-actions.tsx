@@ -188,6 +188,39 @@ export function FailBuildButton({ buildId }: { buildId: string }) {
   )
 }
 
+export function DeleteSecretButton({ projectId, name }: { projectId: string; name: string }) {
+  const router = useRouter()
+  const [busy, setBusy] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+
+  async function remove() {
+    if (!window.confirm(`Delete API key “${name}”? The value is removed and cannot be recovered.`)) return
+    setBusy(true)
+    setError(null)
+    try {
+      await send(`/api/admin/projects/${projectId}/secrets`, {
+        method: "DELETE",
+        body: JSON.stringify({ name }),
+      })
+      router.refresh()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Request failed.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-1">
+      <Button type="button" variant="outline" size="sm" className="rounded-full" disabled={busy} onClick={() => void remove()}>
+        {busy ? <Loader2Icon className="animate-spin" /> : null}
+        Delete
+      </Button>
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+    </div>
+  )
+}
+
 export function HidePublicButton({ projectId }: { projectId: string }) {
   const router = useRouter()
   const [busy, setBusy] = React.useState(false)
