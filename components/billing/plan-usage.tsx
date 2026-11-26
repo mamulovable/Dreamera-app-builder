@@ -21,7 +21,7 @@ export function PlanUsage({ user, projectCount }: { user: SessionUser; projectCo
   const periodEnd = user.currentPeriodEnd && format(new Date(user.currentPeriodEnd), "MMM d")
 
   return (
-    <div className="grid gap-4 rounded-[2rem] border border-border/60 bg-white/70 p-5 shadow-[0_8px_32px_-12px_rgba(76,29,149,0.15)] backdrop-blur-xl sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center sm:gap-6">
+    <div className="grid gap-4 rounded-[2rem] border border-border/60 bg-card/70 p-5 shadow-[0_8px_32px_-12px_rgba(76,29,149,0.15)] backdrop-blur-xl sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center sm:gap-6">
       <div>
         <p className="text-xs text-muted-foreground">Current plan</p>
         <p className={cn("mt-1 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold", isPro ? "bg-brand text-white" : "bg-brand/10 text-brand-dark")}>

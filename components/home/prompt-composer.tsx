@@ -405,11 +405,11 @@ export function PromptComposer() {
           {...dragHandlers}
           aria-busy={isSubmitting}
           className={cn(
-            "relative rounded-[2.25rem] border border-white/80 bg-white/55 p-px shadow-[0_28px_70px_-24px_rgba(76,29,149,0.4)] ring-1 ring-black/[0.03] backdrop-blur-xl transition-[box-shadow,background] focus-within:border-brand/40 focus-within:shadow-[0_28px_70px_-20px_rgba(124,58,237,0.45)]",
+            "relative rounded-[2.25rem] border border-border/70 bg-card/55 p-px shadow-[0_28px_70px_-24px_rgba(76,29,149,0.4)] ring-1 ring-black/[0.03] backdrop-blur-xl transition-[box-shadow,background] focus-within:border-brand/40 focus-within:shadow-[0_28px_70px_-20px_rgba(124,58,237,0.45)] dark:ring-white/[0.04]",
             isDragging && "border-brand/50 ring-brand/20"
           )}
         >
-          <div className="relative rounded-[calc(2.25rem-1px)] bg-white/80 p-2.5 backdrop-blur-xl">
+          <div className="relative rounded-[calc(2.25rem-1px)] bg-card/80 p-2.5 backdrop-blur-xl">
             {isDragging && (
               <div className="pointer-events-none absolute inset-1.5 z-10 flex flex-col items-center justify-center gap-2 rounded-[2rem] border-2 border-dashed border-brand/30 bg-brand/5 text-brand-dark">
                 <UploadCloudIcon className="size-7" />
@@ -624,7 +624,7 @@ export function PromptComposer() {
             key={item.label}
             type="button"
             onClick={() => applySuggestion(item.prompt)}
-            className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/60 py-1.5 pr-4 pl-1.5 text-sm text-muted-foreground shadow-[0_4px_16px_-8px_rgba(76,29,149,0.3)] backdrop-blur-md transition-all hover:-translate-y-0.5 hover:border-brand/30 hover:bg-white hover:text-brand-dark hover:shadow-[0_8px_24px_-8px_rgba(124,58,237,0.4)] focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+            className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/60 py-1.5 pr-4 pl-1.5 text-sm text-muted-foreground shadow-[0_4px_16px_-8px_rgba(76,29,149,0.3)] backdrop-blur-md transition-all hover:-translate-y-0.5 hover:border-brand/30 hover:bg-card hover:text-brand-dark hover:shadow-[0_8px_24px_-8px_rgba(124,58,237,0.4)] focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
           >
             <span
               aria-hidden

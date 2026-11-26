@@ -13,7 +13,8 @@ import {
 } from "lucide-react"
 
 import { Logo } from "@/components/home/logo"
-import { cn } from "cn"
+import { ThemeToggle } from "@/components/theme-toggle"
+import { cn } from "@/lib/utils"
 
 const NAV = [
   { href: "/admin", label: "Overview", icon: GaugeIcon, exact: true },
@@ -36,7 +37,7 @@ export function AdminShell({ email, children }: { email: string; children: React
         <div className="absolute inset-x-0 bottom-0 h-32 bg-linear-to-b from-transparent to-background" />
       </div>
 
-      <header className="relative border-b border-border/70 bg-white/65 backdrop-blur-xl">
+      <header className="relative border-b border-border/70 bg-background/65 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
           <div className="flex items-center gap-3">
             <Link href="/" aria-label="Dreamera home">
@@ -47,9 +48,12 @@ export function AdminShell({ email, children }: { email: string; children: React
               <p className="text-xs text-muted-foreground">{email}</p>
             </div>
           </div>
-          <Link href="/" className="text-sm font-medium text-muted-foreground hover:text-foreground">
-            Back to site
-          </Link>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Link href="/" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+              Back to site
+            </Link>
+          </div>
         </div>
       </header>
 

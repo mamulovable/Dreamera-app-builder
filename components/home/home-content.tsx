@@ -11,10 +11,19 @@ export function HomeContent() {
   const { user, isPending } = useAuth()
 
   if (isPending || user) {
+    const firstName = user?.name.trim().split(/\s+/)[0]
     return (
-      <main className="relative mx-auto max-w-6xl px-4 pt-10 pb-24 sm:px-6 sm:pt-14">
+      <main className="relative mx-auto max-w-6xl px-4 pt-16 pb-24 sm:px-6 sm:pt-24">
         {user && (
-          <div id="composer" className="mx-auto mb-14 w-full max-w-3xl scroll-mt-28">
+          <div id="composer" className="mx-auto mb-16 w-full max-w-3xl scroll-mt-28">
+            <div className="mb-10 text-center">
+              <h1 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
+                Welcome back{firstName ? `, ${firstName}` : ""}
+              </h1>
+              <p className="mt-3 text-base text-pretty text-muted-foreground sm:text-lg">
+                What dream app should we build next?
+              </p>
+            </div>
             <PromptComposer />
           </div>
         )}

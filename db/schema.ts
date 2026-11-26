@@ -39,12 +39,15 @@ export const users = pgTable("users", {
   /** Pro's credits for the current period. Replaced at each renewal, and gone when Pro ends. */
   monthlyCredits: integer("monthly_credits").default(0).notNull(),
   plan: userPlan("plan").default("free").notNull(),
+  /** Bachs customer id (`cust_...`). Null until the first subscription checkout. */
   stripeCustomerId: text("stripe_customer_id").unique(),
-  /** The subscription that makes this person Pro. Null on Free. */
+  /** The Bachs subscription that makes this person Pro (`sub_...`). Null on Free. */
   stripeSubscriptionId: text("stripe_subscription_id"),
   currentPeriodEnd: timestamp("current_period_end"),
   /** They've downgraded: Pro lasts until `currentPeriodEnd`, and then they're on Free. */
   cancelAtPeriodEnd: boolean("cancel_at_period_end").default(false).notNull(),
+  /** When we last applied a Bachs subscription event. An older delivery is ignored. */
+  billingSyncedAt: timestamp("billing_synced_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -72,7 +75,7 @@ export const creditTransactions = pgTable(
   (table) => [index("credit_transactions_user_id_idx").on(table.userId)]
 );
 
-/** One OPay Cashier attempt to pay for a month of Pro. `reference` is the id we send to OPay. */
+/** One Bachs checkout for Pro. `reference` is the checkout id (`chk_...`). */
 export const billingPayments = pgTable(
   "billing_payments",
   {
@@ -81,8 +84,9 @@ export const billingPayments = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     reference: text("reference").notNull().unique(),
+    /** Bachs subscription id, once the checkout has created one. */
     orderNo: text("order_no"),
-    /** Minor units, such as kobo for NGN. */
+    /** Minor units of `currency`, stored locally. Bachs itself uses decimal strings. */
     amount: integer("amount").notNull(),
     currency: text("currency").notNull(),
     /** pending, success, or failed. */
@@ -523,7 +527,7 @@ export const adminAuditAction = pgEnum("admin_audit_action", [
   "set-builder",
 ]);
 
-/** What an operator did in /admin. Tokens and Stripe fields are never written here. */
+/** What an operator did in /admin. Tokens and billing ids are never written here. */
 export const adminAuditLog = pgTable(
   "admin_audit_log",
   {

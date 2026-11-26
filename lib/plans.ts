@@ -32,7 +32,7 @@ export const PLANS: Record<PlanId, { name: string; maxProjects: number | null; m
   pro: { name: "Pro", maxProjects: null, maxScreens: 10, nativePublish: true },
 }
 
-/** Shown on the pricing page. Keep it the same as `OPAY_PRO_AMOUNT`. */
+/** Shown on the pricing page. Keep it the same as the Bachs Pro product. */
 export const PRO_PRICE_LABEL = process.env.NEXT_PUBLIC_PRO_PRICE_LABEL || "$20"
 
 /** A limit the person ran into, which an upgrade prompt explains. API errors carry it as `code`. */

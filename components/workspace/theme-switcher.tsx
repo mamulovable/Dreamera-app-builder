@@ -19,7 +19,7 @@ function ThemeSwatch({ theme }: { theme: AppTheme }) {
   return (
     <span aria-hidden className="flex shrink-0 -space-x-1">
       {[background, primary, accent].map((color, i) => (
-        <span key={i} className="size-3.5 rounded-full ring-1 ring-black/15 ring-offset-1 ring-offset-white" style={{ backgroundColor: color }} />
+        <span key={i} className="size-3.5 rounded-full ring-1 ring-black/15 ring-offset-1 ring-offset-background dark:ring-white/20" style={{ backgroundColor: color }} />
       ))}
     </span>
   )
@@ -40,7 +40,7 @@ export function ThemeSwitcher({
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`App theme: ${current.name}. Change theme`}
-        className="absolute top-0 left-1/2 z-10 flex h-9 max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2 rounded-b-2xl border-x border-b border-border/60 bg-white pr-2.5 pl-3 text-xs font-medium shadow-[0_8px_20px_-14px_rgba(76,29,149,0.45)] outline-none transition-colors hover:bg-brand/5 focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:bg-brand/5"
+        className="absolute top-0 left-1/2 z-10 flex h-9 max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2 rounded-b-2xl border-x border-b border-border/60 bg-card pr-2.5 pl-3 text-xs font-medium shadow-[0_8px_20px_-14px_rgba(76,29,149,0.45)] outline-none transition-colors hover:bg-brand/5 focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:bg-brand/5"
       >
         <PaletteIcon className="size-3.5 shrink-0 text-brand" aria-hidden />
         <span className="truncate">{current.name}</span>

@@ -337,7 +337,7 @@ export function WorkspaceLayout({
         </div>
         <nav
           aria-label="Workspace sections"
-          className="grid shrink-0 grid-cols-3 gap-1 border-t border-border/60 bg-white p-1.5"
+          className="grid shrink-0 grid-cols-3 gap-1 border-t border-border/60 bg-background p-1.5"
         >
           {MOBILE_VIEWS.map(({ id, label, icon: Icon }) => (
             <button

@@ -89,19 +89,19 @@ export function PlanQuestionsCard({
     return (
       <section
         aria-label="Completed planning questions"
-        className="w-full overflow-hidden rounded-2xl border border-border/60 bg-white/80 opacity-85"
+        className="w-full overflow-hidden rounded-2xl border border-border/60 bg-card/80 opacity-85"
       >
         <button
           type="button"
           onClick={() => setExpanded((e) => !e)}
           aria-expanded={expanded}
-          className="flex w-full items-center justify-between gap-2 bg-linear-to-br from-brand/5 via-white to-brand-accent/5 px-3.5 py-2.5 text-left"
+          className="flex w-full items-center justify-between gap-2 bg-linear-to-br from-brand/10 via-muted/60 to-brand-accent/10 px-3.5 py-2.5 text-left"
         >
           <span className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-dark">
             <CompassIcon className="size-3.5" />
             Planning questions ({questions.length})
           </span>
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-700">
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
             <CheckIcon className="size-3" />
             Answered
             <ChevronDownIcon className={cn("size-3.5 text-muted-foreground transition-transform", expanded && "rotate-180")} />
@@ -140,9 +140,9 @@ export function PlanQuestionsCard({
   return (
     <section
       aria-label="Interactive planning questions"
-      className="w-full overflow-hidden rounded-2xl border border-brand/25 bg-white shadow-[0_12px_32px_-20px_rgba(76,29,149,0.4)]"
+      className="w-full overflow-hidden rounded-2xl border border-brand/25 bg-card shadow-[0_12px_32px_-20px_rgba(76,29,149,0.4)]"
     >
-      <div className="bg-linear-to-br from-brand/8 via-white to-brand-accent/10 px-4 pt-3.5 pb-3">
+      <div className="bg-linear-to-br from-brand/10 via-muted/60 to-brand-accent/10 px-4 pt-3.5 pb-3">
         <div className="flex items-center justify-between gap-2">
           <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-brand-dark uppercase">
             <CompassIcon className="size-3.5" />
@@ -210,7 +210,7 @@ export function PlanQuestionsCard({
                   ? "border-brand bg-brand/8 ring-1 ring-brand/25"
                   : option.recommended
                     ? "border-brand/30 bg-brand/[0.025] hover:border-brand/50 hover:bg-brand/5"
-                    : "border-border/70 bg-white hover:border-brand/30 hover:bg-muted/30"
+                    : "border-border/70 bg-card hover:border-brand/30 hover:bg-muted/30"
               )}
             >
               <span
@@ -219,7 +219,7 @@ export function PlanQuestionsCard({
                   "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border text-[10px] transition-colors",
                   selected
                     ? "border-brand bg-brand text-white"
-                    : "border-muted-foreground/35 bg-white group-hover:border-brand/60"
+                    : "border-muted-foreground/35 bg-card group-hover:border-brand/60"
                 )}
               >
                 {selected && <CheckIcon className="size-2.5 stroke-[3]" />}
@@ -269,7 +269,7 @@ export function PlanQuestionsCard({
                 }}
                 placeholder="Type your own preference…"
                 disabled={disabled}
-                className="h-7 min-w-0 flex-1 rounded-lg border border-border bg-white px-2 text-xs outline-none focus:border-brand"
+                className="h-7 min-w-0 flex-1 rounded-lg border border-border bg-card px-2 text-xs outline-none focus:border-brand"
               />
               {currentIndex < questions.length - 1 && (
                 <Button
@@ -362,18 +362,18 @@ export function ChangePlanCard({
     <section
       aria-label={`Change plan: ${changePlan.title}`}
       className={cn(
-        "w-full overflow-hidden rounded-2xl border bg-white shadow-[0_12px_32px_-20px_rgba(76,29,149,0.4)]",
-        state === "confirmed" ? "border-border/60 opacity-85" : "border-brand/25"
+        "w-full overflow-hidden rounded-2xl border bg-card shadow-[0_12px_32px_-20px_rgba(76,29,149,0.4)]",
+        state === "confirmed" ? "border-border/60" : "border-brand/25"
       )}
     >
-      <div className="bg-linear-to-br from-brand/5 via-white to-brand-accent/10 px-4 pt-3.5 pb-3">
+      <div className="bg-linear-to-br from-brand/10 via-muted/60 to-brand-accent/10 px-4 pt-3.5 pb-3">
         <div className="flex items-center justify-between gap-2">
           <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-brand-dark uppercase">
             <CompassIcon className="size-3.5" />
             Planned changes
           </span>
           {state === "confirmed" && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
               <CheckIcon className="size-3" />
               Confirmed
             </span>

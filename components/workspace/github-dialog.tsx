@@ -361,7 +361,7 @@ function RepositoryPicker({
             }}
             className={cn(
               "rounded-full py-1.5 text-sm font-medium transition-colors",
-              mode === id ? "bg-white shadow-sm" : "text-muted-foreground hover:text-foreground"
+              mode === id ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
             )}
           >
             {label}

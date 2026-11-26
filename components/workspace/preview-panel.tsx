@@ -79,7 +79,7 @@ export function PreviewPanel({
   const html = isHtmlWebsite(platform)
 
   return (
-    <Tabs defaultValue="preview" className="@container flex h-full min-h-0 gap-0 bg-white">
+    <Tabs defaultValue="preview" className="@container flex h-full min-h-0 gap-0 bg-background">
       <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-border/60 px-3">
         <TabsList className="h-8 rounded-full bg-muted/70 p-0.5">
           <TabsTrigger value="preview" className="rounded-full px-3 data-active:text-brand-dark">
@@ -179,7 +179,7 @@ function AppPreview({
   onOpenPublish: () => void
 }) {
   return (
-    <div className="flex h-full flex-col gap-3 bg-linear-to-b from-brand/5 to-white p-4">
+    <div className="flex h-full flex-col gap-3 bg-linear-to-b from-brand/5 to-background p-4">
       <WebsiteBar webPublish={webPublish} onOpenPublish={onOpenPublish} />
       {/* Phone or browser frame: keeps its shape in a tall or a wide panel. */}
       <div className="flex min-h-0 w-full flex-1 items-center justify-center [container-type:size]">
@@ -271,7 +271,7 @@ function WebsiteBar({ webPublish, onOpenPublish }: { webPublish: WebPublishState
   const step = starting || !web || !isWebPublishActive(web.status) ? "uploading" : web.status
 
   return (
-    <div className="relative z-10 flex min-h-10 shrink-0 items-center gap-2 rounded-full border border-border/60 bg-white py-1 pr-1 pl-3 shadow-xs">
+    <div className="relative z-10 flex min-h-10 shrink-0 items-center gap-2 rounded-full border border-border/60 bg-card py-1 pr-1 pl-3 shadow-xs">
       {active ? (
         <Loader2Icon aria-hidden className="size-3.5 shrink-0 animate-spin text-brand" />
       ) : failed ? (
@@ -352,8 +352,8 @@ function CodeView({ screens, appFiles }: { screens: ProjectScreen[]; appFiles: P
 
   return (
     <div className="grid h-full min-h-0 grid-cols-[minmax(140px,38%)_1fr]">
-      <nav aria-label="Project files" className="min-h-0 overflow-y-auto border-r border-border/60 bg-neutral-50/70 py-2">
-        <p className="px-3 pb-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+      <nav aria-label="Project files" className="min-h-0 overflow-y-auto border-r border-border/60 bg-muted/50 py-2">
+        <p className="px-3 pb-1.5 text-[11px] font-semibold tracking-wide text-foreground/70 uppercase">
           Files
         </p>
         <FileTree
@@ -403,8 +403,8 @@ function FileTree({
               className={cn(
                 "flex w-full items-center gap-1.5 py-1 pr-2 text-left text-xs transition-colors",
                 node.path === activePath
-                  ? "bg-brand/10 font-medium text-brand-dark"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? "bg-brand/15 font-medium text-brand-dark"
+                  : "text-foreground/80 hover:bg-muted hover:text-foreground"
               )}
             >
               {node.name.endsWith(".json") ? (

@@ -80,7 +80,7 @@ export function ProjectMenu({
             variant="ghost"
             size="icon"
             aria-label={`Actions for ${project.name}`}
-            className="rounded-full bg-white/85 text-foreground/70 shadow-sm backdrop-blur-md hover:bg-white hover:text-brand-dark"
+            className="rounded-full bg-card/85 text-foreground/70 shadow-sm backdrop-blur-md hover:bg-card hover:text-brand-dark"
           />
         }
       >

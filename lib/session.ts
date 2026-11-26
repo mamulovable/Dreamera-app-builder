@@ -112,8 +112,10 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
   if (!session) return null
 
   let user = await ensureUser(session.user)
-  // OPay charges one month at a time, so Pro ends when that paid period is over.
-  if (user.plan === "pro" && user.currentPeriodEnd && user.currentPeriodEnd.getTime() <= Date.now()) {
+  // A scheduled cancellation, or a month paid outside Bachs, ends when that date passes.
+  // An active Bachs subscription renews on its own, so a late invoice must not drop Pro.
+  const renewsWithBachs = user.stripeSubscriptionId?.startsWith("sub_") && !user.cancelAtPeriodEnd
+  if (user.plan === "pro" && user.currentPeriodEnd && user.currentPeriodEnd.getTime() <= Date.now() && !renewsWithBachs) {
     await endProPlan(user.id, `ended:period:${user.currentPeriodEnd.toISOString()}`)
     user = {
       ...user,

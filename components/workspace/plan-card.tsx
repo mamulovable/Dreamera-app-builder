@@ -42,21 +42,21 @@ export function PlanCard({
     <section
       aria-label={`${unit === "page" ? "Site" : "App"} plan: ${plan.appName}`}
       className={cn(
-        "w-full overflow-hidden rounded-2xl border bg-white shadow-[0_12px_32px_-20px_rgba(76,29,149,0.4)]",
+        "w-full overflow-hidden rounded-2xl border bg-card shadow-[0_12px_32px_-20px_rgba(76,29,149,0.4)]",
         state === "superseded" ? "border-border/60 opacity-70" : "border-brand/25/80"
       )}
     >
-      <div className="bg-linear-to-br from-brand/5 via-white to-brand-accent/10 px-4 pt-3.5 pb-3">
+      <div className="bg-linear-to-br from-brand/10 via-muted/60 to-brand-accent/10 px-4 pt-3.5 pb-3">
         <div className="flex items-center justify-between gap-2">
           <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-brand-dark uppercase">
             <LayoutListIcon className="size-3.5" />
             {unit === "page" ? "Site plan" : "App plan"}
           </span>
           {state === "superseded" && (
-            <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] text-muted-foreground">Earlier version</span>
+            <span className="rounded-full bg-background/80 px-2 py-0.5 text-[11px] text-muted-foreground">Earlier version</span>
           )}
           {state === "confirmed" && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
               <CheckIcon className="size-3" />
               Confirmed
             </span>

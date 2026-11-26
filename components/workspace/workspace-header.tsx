@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Spinner } from "@/components/ui/spinner"
 import { Logo } from "@/components/home/logo"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 export function WorkspaceHeader({
   projectId,
@@ -86,7 +87,7 @@ export function WorkspaceHeader({
   const canRename = !readOnly && !busy && status !== "building"
 
   return (
-    <header className="relative z-20 flex h-12 shrink-0 items-center gap-2 border-b border-border/60 bg-white/80 px-3 backdrop-blur-xl sm:gap-3 sm:px-4">
+    <header className="relative z-20 flex h-12 shrink-0 items-center gap-2 border-b border-border/60 bg-background/80 px-3 backdrop-blur-xl sm:gap-3 sm:px-4">
       <Link href="/" aria-label="Dreamera home" className="shrink-0 rounded-xl">
         <Logo showText={false} className="size-8 rounded-full" />
       </Link>
@@ -122,6 +123,7 @@ export function WorkspaceHeader({
       </div>
 
       <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+        <ThemeToggle className="size-8" />
         <Link
           href="/pricing"
           title={`${credits} credits remaining`}
@@ -290,7 +292,7 @@ function EditableAppName({
               }
             }}
             aria-label="App name"
-            className="h-8 min-w-0 flex-1 rounded-lg border border-brand/30 bg-white px-2.5 text-sm font-semibold tracking-tight outline-none focus:ring-2 focus:ring-brand/20"
+            className="h-8 min-w-0 flex-1 rounded-lg border border-brand/30 bg-background px-2.5 text-sm font-semibold tracking-tight outline-none focus:ring-2 focus:ring-brand/20"
           />
           <Button
             type="button"
@@ -316,7 +318,7 @@ function EditableAppName({
           </Button>
         </div>
         {error && (
-          <p role="alert" className="absolute left-0 top-full z-10 mt-1 whitespace-nowrap rounded-md bg-white px-1.5 text-[11px] text-destructive shadow-sm">
+          <p role="alert" className="absolute left-0 top-full z-10 mt-1 whitespace-nowrap rounded-md bg-popover px-1.5 text-[11px] text-destructive shadow-sm">
             {error}
           </p>
         )}
@@ -354,7 +356,7 @@ function AiButton({ enabled, onClick }: { enabled: boolean; onClick: () => void 
       aria-label={enabled ? "AI is on" : "Allow AI"}
       className={cn(
         "h-8 rounded-full px-2.5 text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-        enabled && "text-emerald-700 hover:bg-emerald-500/10 hover:text-emerald-700"
+        enabled && "text-emerald-700 hover:bg-emerald-500/10 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-400"
       )}
     >
       <SparklesIcon className="size-3.5" />
@@ -385,7 +387,7 @@ function BackendButton({ backend, onClick }: { backend: BackendStatus; onClick: 
         onClick={onClick}
         title="Backend needs attention"
         aria-label="Backend needs attention"
-        className="h-8 rounded-full px-2.5 text-amber-700 hover:bg-amber-500/10 hover:text-amber-700"
+        className="h-8 rounded-full px-2.5 text-amber-700 hover:bg-amber-500/10 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-400"
       >
         <DatabaseIcon className="size-3.5" />
         <span className="hidden lg:inline">Backend</span>
@@ -399,7 +401,7 @@ function BackendButton({ backend, onClick }: { backend: BackendStatus; onClick: 
         onClick={onClick}
         title="CloudHike backend connected"
         aria-label="CloudHike backend connected"
-        className="h-8 rounded-full px-2.5 text-emerald-700 hover:bg-emerald-500/10 hover:text-emerald-700"
+        className="h-8 rounded-full px-2.5 text-emerald-700 hover:bg-emerald-500/10 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-400"
       >
         <span aria-hidden className="size-1.5 rounded-full bg-emerald-500" />
         <span className="hidden lg:inline">Backend</span>

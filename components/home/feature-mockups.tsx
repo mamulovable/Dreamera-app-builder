@@ -31,7 +31,7 @@ function Frame({
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-[1.75rem] border border-white/80 bg-white/70 shadow-[0_28px_60px_-36px_rgba(76,29,149,0.55)] backdrop-blur-xl",
+        "relative overflow-hidden rounded-[1.75rem] border border-border/70 bg-card/70 shadow-[0_28px_60px_-36px_rgba(76,29,149,0.55)] backdrop-blur-xl",
         className
       )}
     >
@@ -203,7 +203,7 @@ export function FutureMockup({ imageSrc, imageAlt, className }: MockupProps) {
             </span>
           </div>
         </div>
-        <div className="rounded-2xl border border-brand/20 bg-linear-to-br from-brand to-brand-dark p-4 text-white shadow-lg shadow-brand/25">
+        <div className="rounded-2xl border border-brand/20 bg-linear-to-br from-brand to-brand-deep p-4 text-white shadow-lg shadow-brand/25">
           <div className="flex items-center gap-3">
             <span className="flex size-10 items-center justify-center rounded-2xl bg-white/15">
               <SmartphoneIcon className="size-4" />

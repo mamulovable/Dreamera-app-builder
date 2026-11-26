@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 
 import { UpgradeDialogProvider } from "@/components/billing/upgrade-dialog";
+import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/lib/auth-client";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -23,11 +24,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${jakarta.variable} scroll-smooth`}>
+    <html lang="en" className={`${jakarta.variable} scroll-smooth`} suppressHydrationWarning>
       <body className="antialiased">
-        <AuthProvider>
-          <UpgradeDialogProvider>{children}</UpgradeDialogProvider>
-        </AuthProvider>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <AuthProvider>
+            <UpgradeDialogProvider>{children}</UpgradeDialogProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

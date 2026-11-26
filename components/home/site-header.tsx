@@ -30,6 +30,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { Logo } from "@/components/home/logo"
 import { useSignInDialog } from "@/components/home/sign-in-dialog"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 const NAV_LINKS = [
   { label: "How it works", href: "/#steps" },
@@ -44,7 +45,7 @@ export function SiteHeader() {
   const navLinks = user ? NAV_LINKS.filter((link) => link.href === "/pricing") : NAV_LINKS
 
   return (
-    <header className="sticky top-0 z-40 border-b border-black/[0.04] bg-background/70 px-3 backdrop-blur-xl sm:px-6">
+    <header className="sticky top-0 z-40 border-b border-border/60 bg-background/70 px-3 backdrop-blur-xl sm:px-6">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4">
         <div className="flex items-center gap-8">
           <Link href="/" aria-label="Dreamera home">
@@ -64,6 +65,7 @@ export function SiteHeader() {
         </div>
 
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           {isPending ? (
             <Skeleton className="size-10 rounded-full" />
           ) : user ? (
@@ -165,7 +167,7 @@ function UserMenu({ user }: { user: SessionUser }) {
         className="rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         aria-label="Open account menu"
       >
-        <Avatar size="lg" className="size-10 ring-2 ring-white">
+        <Avatar size="lg" className="size-10 ring-2 ring-background">
           {image && <AvatarImage src={image} alt={name} />}
           <AvatarFallback className="bg-linear-to-br from-brand/10 to-brand/20 font-medium text-brand-dark">
             {initials}

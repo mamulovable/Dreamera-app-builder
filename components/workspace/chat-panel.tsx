@@ -308,7 +308,7 @@ export function ChatPanel({
   }
 
   return (
-    <section aria-label="Chat" className="flex h-full min-h-0 flex-col bg-white">
+    <section aria-label="Chat" className="flex h-full min-h-0 flex-col bg-background">
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border/60 px-4">
         <span className="flex size-6 items-center justify-center rounded-lg bg-brand text-white">
           <SparklesIcon className="size-3.5" />
@@ -455,7 +455,7 @@ export function ChatPanel({
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={asset.url} alt="" className="size-7 rounded-lg object-cover" />
                         ) : (
-                          <span className="flex size-7 items-center justify-center rounded-lg bg-white">
+                          <span className="flex size-7 items-center justify-center rounded-lg bg-card">
                             <FileTextIcon className="size-3.5 text-brand" />
                           </span>
                         )}
@@ -493,7 +493,7 @@ export function ChatPanel({
                     size="sm"
                     variant="outline"
                     onClick={() => void send({ action: "start" })}
-                    className="h-7 rounded-full border-red-200 bg-white text-red-800 hover:bg-red-100"
+                    className="h-7 rounded-full border-red-200 bg-card text-red-800 hover:bg-red-100 dark:border-red-900/60 dark:text-red-300 dark:hover:bg-red-950/50"
                   >
                     <RotateCwIcon />
                     Try again
@@ -521,11 +521,11 @@ export function ChatPanel({
       >
         <div
           className={cn(
-            "rounded-3xl bg-linear-to-br from-brand/40 via-white to-brand-accent/40 p-px shadow-[0_12px_32px_-16px_rgba(76,29,149,0.35)] transition-colors focus-within:from-brand focus-within:to-brand-accent",
+            "rounded-3xl bg-linear-to-br from-brand/40 via-card to-brand-accent/40 p-px shadow-[0_12px_32px_-16px_rgba(76,29,149,0.35)] transition-colors focus-within:from-brand focus-within:to-brand-accent",
             isDragging && "from-brand to-brand ring-2 ring-brand/50"
           )}
         >
-          <div className="relative rounded-[calc(1.5rem-1px)] bg-white p-2">
+          <div className="relative rounded-[calc(1.5rem-1px)] bg-card p-2">
             {isDragging && (
               <div className="pointer-events-none absolute inset-1.5 z-10 flex flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-brand/40 bg-brand/5 text-brand-dark backdrop-blur-xs">
                 <UploadCloudIcon className="size-6 text-brand" />
@@ -560,14 +560,14 @@ export function ChatPanel({
                       <button
                         type="button"
                         onClick={() => setPreviewImage({ fileName: item.file.name, url: item.previewUrl! })}
-                        className="size-7 overflow-hidden rounded-lg border border-brand/15 bg-white"
+                        className="size-7 overflow-hidden rounded-lg border border-brand/15 bg-card"
                         aria-label={`Preview ${item.file.name}`}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={item.previewUrl} alt="" className="size-full object-cover" />
                       </button>
                     ) : (
-                      <span className="flex size-7 items-center justify-center rounded-lg bg-white">
+                      <span className="flex size-7 items-center justify-center rounded-lg bg-card">
                         <FileTextIcon className="size-3.5 text-brand" />
                       </span>
                     )}
@@ -822,7 +822,7 @@ function UserMessage({
                   rel="noreferrer"
                   className="flex max-w-44 items-center gap-1.5 rounded-xl border border-border/60 bg-muted/40 p-1 pr-2.5 text-xs text-muted-foreground transition-colors hover:border-brand/25 hover:text-brand-dark"
                 >
-                  <span className="flex size-7 items-center justify-center rounded-lg bg-white">
+                  <span className="flex size-7 items-center justify-center rounded-lg bg-card">
                     <FileTextIcon className="size-3.5 text-brand" />
                   </span>
                   <span className="truncate">{asset.fileName}</span>
@@ -833,7 +833,7 @@ function UserMessage({
         </ul>
       )}
       {text ? (
-        <p className="rounded-2xl rounded-br-md bg-linear-to-br from-brand to-brand-dark px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap text-white shadow-sm shadow-brand/20">
+        <p className="rounded-2xl rounded-br-md bg-linear-to-br from-brand to-brand-deep px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap text-white shadow-sm shadow-brand/20">
           <span className="sr-only">You: </span>
           {text}
         </p>

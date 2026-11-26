@@ -45,7 +45,7 @@ export default async function AdminUserDetailPage({ params }: Props) {
               <dd className="font-medium">{user.cancelAtPeriodEnd ? "Yes" : "No"}</dd>
             </div>
             <div className="sm:col-span-2">
-              <dt className="text-muted-foreground">Stripe customer</dt>
+              <dt className="text-muted-foreground">Bachs customer</dt>
               <dd className="font-mono text-xs break-all">{user.stripeCustomerId || "—"}</dd>
             </div>
             <div className="sm:col-span-2">

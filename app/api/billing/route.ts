@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 
-import { BillingError, confirmCheckout, createCheckoutUrl, setDowngrade } from "@/lib/billing/opay"
+import { BillingError, confirmCheckout, createCheckoutUrl, manageBillingUrl, setDowngrade } from "@/lib/billing/bachs"
 import { getCurrentUser } from "@/lib/session"
 
 function error(message: string, status: number) {
@@ -8,9 +8,10 @@ function error(message: string, status: number) {
 }
 
 /**
- * Changes the signed-in person's plan. `upgrade` answers with the OPay Cashier
- * page. `confirm` checks a payment they just came back from. `downgrade` and
- * `keep-pro` apply straight away.
+ * Changes the signed-in person's plan. `upgrade` answers with the Bachs checkout,
+ * or the customer portal when they already subscribe. `confirm` reads a checkout
+ * they just came back from. `downgrade` schedules the end of Pro. `keep-pro`
+ * takes that back, or opens the portal when Bachs is the one canceling.
  */
 export async function POST(request: Request) {
   const user = await getCurrentUser().catch(() => null)
@@ -20,17 +21,16 @@ export async function POST(request: Request) {
   try {
     switch (body?.action) {
       case "upgrade":
-      case "manage":
         return NextResponse.json({ url: await createCheckoutUrl(user.id) })
+      case "manage":
+        return NextResponse.json({ url: await manageBillingUrl(user.id) })
       case "confirm":
         if (typeof body.reference !== "string") return error("Invalid request.", 400)
         return NextResponse.json(await confirmCheckout(user.id, body.reference))
       case "downgrade":
-        await setDowngrade(user.id, true)
-        return NextResponse.json({ ok: true })
+        return NextResponse.json({ ok: true, ...(await setDowngrade(user.id, true)) })
       case "keep-pro":
-        await setDowngrade(user.id, false)
-        return NextResponse.json({ ok: true })
+        return NextResponse.json({ ok: true, ...(await setDowngrade(user.id, false)) })
       default:
         return error("Invalid request.", 400)
     }

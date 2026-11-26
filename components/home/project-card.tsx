@@ -63,7 +63,7 @@ export const ProjectCard = React.forwardRef<
   return (
     <article
       ref={ref}
-      className="group relative flex flex-col rounded-[2rem] border border-white/70 bg-white/70 p-2 shadow-[0_8px_30px_-16px_rgba(76,29,149,0.25)] backdrop-blur-sm transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_28px_50px_-20px_rgba(76,29,149,0.35)] has-[[data-card-action]:focus-visible]:ring-3 has-[[data-card-action]:focus-visible]:ring-ring/50"
+      className="group relative flex flex-col rounded-[2rem] border border-border/70 bg-card/70 p-2 shadow-[0_8px_30px_-16px_rgba(76,29,149,0.25)] backdrop-blur-sm transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_28px_50px_-20px_rgba(76,29,149,0.35)] has-[[data-card-action]:focus-visible]:ring-3 has-[[data-card-action]:focus-visible]:ring-ring/50"
     >
       <div className="relative flex h-72 items-start justify-center overflow-hidden rounded-[1.6rem] bg-linear-to-br from-brand/10 to-brand-accent/10">
         <div

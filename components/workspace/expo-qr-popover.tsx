@@ -91,7 +91,7 @@ function PopoverBody({ status, hasProject, retry }: { status: ExpoSnackStatus; h
   return (
     <>
       <div className="flex justify-center">
-        <div className="rounded-2xl border border-border/60 bg-white p-3">
+        <div className="rounded-2xl border border-border/60 bg-card p-3">
           <QRCodeSVG value={status.url} size={192} level="M" title="QR code that opens this app in Expo Go" />
         </div>
       </div>

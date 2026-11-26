@@ -5,7 +5,7 @@ import { SignInDialogProvider } from "@/components/home/sign-in-dialog"
 import { SiteFooter } from "@/components/home/site-footer"
 import { SiteHeader } from "@/components/home/site-header"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { confirmCheckout } from "@/lib/billing/opay"
+import { confirmCheckout } from "@/lib/billing/bachs"
 import { EDIT_CREDITS, IMAGE_CREDITS, PLANS, PRO_MONTHLY_CREDITS, SCREEN_CREDITS, SMALL_APP_CREDITS } from "@/lib/plans"
 import { getCurrentUser } from "@/lib/session"
 
@@ -40,11 +40,11 @@ const QUESTIONS = [
   },
 ]
 
-export default async function PricingPage({ searchParams }: { searchParams: Promise<{ checkout?: string; reference?: string }> }) {
-  const { checkout, reference } = await searchParams
-  if (checkout === "success" && reference) {
+export default async function PricingPage({ searchParams }: { searchParams: Promise<{ checkout?: string; checkout_id?: string }> }) {
+  const { checkout, checkout_id: checkoutId } = await searchParams
+  if (checkoutId) {
     const user = await getCurrentUser().catch(() => null)
-    if (user) await confirmCheckout(user.id, reference).catch((cause) => console.error("Confirming an OPay payment failed", cause))
+    if (user) await confirmCheckout(user.id, checkoutId).catch((cause) => console.error("Confirming a Bachs payment failed", cause))
   }
 
   return (
@@ -66,7 +66,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Prom
             </p>
           </section>
 
-          <PricingPlans checkout={checkout === "success"} reference={checkout === "success" ? (reference ?? null) : null} canceled={checkout === "cancel"} />
+          <PricingPlans checkout={Boolean(checkoutId)} reference={checkoutId ?? null} canceled={checkout === "cancel"} />
 
           <section aria-labelledby="credit-costs" className="mx-auto mt-20 max-w-4xl">
             <h2 id="credit-costs" className="text-center text-2xl font-semibold tracking-tight">
@@ -74,7 +74,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Prom
             </h2>
             <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {CREDIT_COSTS.map(({ value, label, detail }) => (
-                <li key={label} className="rounded-3xl border border-border/60 bg-white/70 p-5">
+                <li key={label} className="rounded-3xl border border-border/60 bg-card/70 p-5">
                   <p className="text-3xl font-semibold tracking-tight text-brand-dark">
                     {value === 0 ? "Free" : `${value} ${value === 1 ? "credit" : "credits"}`}
                   </p>

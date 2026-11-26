@@ -34,7 +34,7 @@ export function PublicAppDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[min(92dvh,860px)] flex-col gap-0 overflow-hidden rounded-3xl p-0 sm:max-w-3xl md:flex-row">
-        <div className="min-h-0 flex-1 bg-linear-to-b from-brand/5 to-white p-4 sm:p-6">
+        <div className="min-h-0 flex-1 bg-linear-to-b from-brand/5 to-background p-4 sm:p-6">
           {/* The phone takes all the room there is, keeping its shape on any screen. */}
           <div className="flex size-full items-center justify-center [container-type:size]">
             <div className={isHtmlWebsite(project.platform) ? "relative aspect-[16/10] w-[min(100cqw,calc(100cqh*16/10))]" : "relative aspect-[9/19] w-[min(100cqw,calc(100cqh*9/19))]"}>

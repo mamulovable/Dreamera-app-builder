@@ -49,7 +49,7 @@ export function SitePreview({ projectId }: { projectId: string }) {
   const isHtmlSite = Boolean(html && html.pages.length > 0)
 
   return (
-    <div className="flex h-dvh flex-col bg-white">
+    <div className="flex h-dvh flex-col bg-background">
       <header className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-border/60 px-3">
         <div className="flex min-w-0 items-center gap-2">
           <Link

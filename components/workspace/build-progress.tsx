@@ -14,7 +14,7 @@ export function BuildProgress({ screens }: { screens: ProjectScreen[] }) {
   return (
     <section
       aria-label="Build progress"
-      className="w-full overflow-hidden rounded-2xl border border-brand/25/80 bg-white shadow-[0_12px_32px_-20px_rgba(76,29,149,0.4)]"
+      className="w-full overflow-hidden rounded-2xl border border-brand/25/80 bg-card shadow-[0_12px_32px_-20px_rgba(76,29,149,0.4)]"
     >
       <div className="px-4 pt-3.5 pb-3">
         <div className="flex items-center justify-between text-xs">

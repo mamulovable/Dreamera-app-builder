@@ -369,7 +369,7 @@ function FieldRow({ label, stacked, children }: { label: string; stacked?: boole
 }
 
 const inputClass =
-  "h-8 min-w-0 rounded-lg border border-border/70 bg-white px-2 text-xs outline-none transition-colors focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/25 disabled:opacity-60"
+  "h-8 min-w-0 rounded-lg border border-border/70 bg-background px-2 text-xs outline-none transition-colors focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/25 disabled:opacity-60"
 
 function NumberField({
   value,
@@ -440,7 +440,7 @@ function OptionsField({
           onClick={() => onChange(option)}
           className={cn(
             "flex h-7 min-w-7 items-center justify-center rounded-md px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60",
-            value === option && "bg-white text-brand-dark shadow-xs"
+            value === option && "bg-background text-brand-dark shadow-xs"
           )}
         >
           {Icon ? <Icon className="size-3.5" /> : name}
@@ -524,7 +524,7 @@ function ColorField({
               aria-label={`Custom ${label.toLowerCase()}`}
               value={hex ?? "#000000"}
               onChange={(event) => onChange(event.target.value)}
-              className="size-8 shrink-0 cursor-pointer rounded-lg border border-border/70 bg-white p-0.5"
+              className="size-8 shrink-0 cursor-pointer rounded-lg border border-border/70 bg-background p-0.5"
             />
             <HexInput key={hex ?? "none"} value={hex ?? ""} onChange={onChange} />
             <button
@@ -663,7 +663,7 @@ function ImageField({
         {/* eslint-disable-next-line @next/next/no-img-element -- Any url can be typed here, so it can't go through next/image. */}
         {uri && <img src={uri} alt="Current image" className="size-full object-cover" />}
         {job && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-[2px]">
+          <div className="absolute inset-0 flex items-center justify-center bg-background/70 backdrop-blur-[2px]">
             <Spinner className="size-5 text-brand" />
           </div>
         )}
@@ -687,7 +687,7 @@ function ImageField({
               disabled={disabled || !selection?.info || (id === "transform" && !uri)}
               onClick={() => setTool((open) => (open === id ? null : id))}
               className={cn(
-                "flex h-8 w-full items-center gap-2 rounded-lg border border-border/70 bg-white px-2.5 text-xs font-medium transition-colors hover:border-brand/40 hover:text-brand-dark disabled:opacity-60",
+                "flex h-8 w-full items-center gap-2 rounded-lg border border-border/70 bg-background px-2.5 text-xs font-medium transition-colors hover:border-brand/40 hover:text-brand-dark disabled:opacity-60",
                 tool === id && "border-brand/40 bg-brand/5 text-brand-dark"
               )}
             >
@@ -1054,7 +1054,7 @@ function EditWithAi({ editor, label }: { editor: InlineEditor; label: string }) 
   }
   return (
     <form onSubmit={submit} className="rounded-full bg-linear-to-br from-brand/40 via-white to-brand-accent/40 p-px focus-within:from-brand focus-within:to-brand-accent">
-      <div className="flex items-center gap-1 rounded-full bg-white py-0.5 pr-0.5 pl-2.5">
+      <div className="flex items-center gap-1 rounded-full bg-card py-0.5 pr-0.5 pl-2.5">
         <SparklesIcon className="size-3.5 shrink-0 text-brand" />
         <input
           ref={inputRef}
@@ -1111,7 +1111,7 @@ export function ElementPopover({
       role="dialog"
       aria-label={`Edit ${label}`}
       style={style}
-      className="absolute z-20 flex w-[19rem] flex-col overflow-hidden rounded-2xl border border-white/70 bg-white shadow-[0_24px_64px_-20px_rgba(76,29,149,0.45)] ring-1 ring-black/[0.05]"
+      className="absolute z-20 flex w-[19rem] flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-[0_24px_64px_-20px_rgba(76,29,149,0.45)] ring-1 ring-black/[0.05] dark:ring-white/[0.06]"
     >
       <EditorHeader editor={editor} screenName={screenName} />
       <div role="tablist" aria-label="Property categories" className="flex shrink-0 gap-0.5 overflow-x-auto border-b border-border/60 px-1.5 py-1.5">
@@ -1167,7 +1167,7 @@ export function ElementAdvancedPanel({
   return (
     <aside
       aria-label={`Advanced edit: ${label}`}
-      className="absolute top-12 right-3 bottom-3 z-20 flex w-[20rem] max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-2xl border border-white/70 bg-white shadow-[0_24px_64px_-20px_rgba(76,29,149,0.45)] ring-1 ring-black/[0.05]"
+      className="absolute top-12 right-3 bottom-3 z-20 flex w-[20rem] max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-[0_24px_64px_-20px_rgba(76,29,149,0.45)] ring-1 ring-black/[0.05] dark:ring-white/[0.06]"
     >
       <EditorHeader editor={editor} screenName={screenName} />
       <div className="min-h-0 flex-1 overflow-y-auto">

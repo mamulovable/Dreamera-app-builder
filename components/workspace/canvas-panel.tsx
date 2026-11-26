@@ -339,7 +339,7 @@ export function CanvasPanel({
   }, [elementRect, view, moved, editor.advanced])
 
   return (
-    <section ref={sectionRef} aria-label="Canvas" className="relative flex h-full min-h-0 flex-col bg-neutral-50">
+    <section ref={sectionRef} aria-label="Canvas" className="relative flex h-full min-h-0 flex-col bg-muted/50">
       <div
         ref={viewportRef}
         role="application"
@@ -354,7 +354,7 @@ export function CanvasPanel({
           drag?.kind === "pan" ? "cursor-grabbing" : tool === "hand" ? "cursor-grab" : "cursor-default"
         )}
         style={{
-          backgroundImage: "radial-gradient(rgba(76,29,149,0.14) 1px, transparent 1px)",
+          backgroundImage: "radial-gradient(var(--canvas-dot) 1px, transparent 1px)",
           backgroundSize: `${22 * view.zoom}px ${22 * view.zoom}px`,
           backgroundPosition: `${view.x}px ${view.y}px`,
         }}
@@ -427,7 +427,7 @@ export function CanvasPanel({
       <div
         role="toolbar"
         aria-label="Canvas tools"
-        className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-full border border-white/70 bg-white/90 p-1 shadow-[0_8px_32px_-12px_rgba(76,29,149,0.35)] ring-1 ring-black/[0.03] backdrop-blur-xl"
+        className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-full border border-border/70 bg-card/90 p-1 shadow-[0_8px_32px_-12px_rgba(76,29,149,0.35)] ring-1 ring-black/[0.03] backdrop-blur-xl dark:ring-white/[0.04]"
       >
         <ToolButton label="Select (move screens)" active={tool === "select"} onClick={() => setTool("select")}>
           <MousePointer2Icon />
@@ -488,7 +488,7 @@ function EditModeBar({ editor, screenName, besidePanel }: { editor: InlineEditor
     <div
       role="status"
       style={besidePanel ? { left: `calc((100% - ${ADVANCED_PANEL_SPACE}px) / 2)`, maxWidth: `calc(100% - ${ADVANCED_PANEL_SPACE + 12}px)` } : undefined}
-      className="absolute top-11 left-1/2 z-10 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-white/70 bg-white/95 py-1 pr-1 pl-3 text-xs shadow-lg shadow-brand/15 ring-1 ring-black/[0.04] backdrop-blur"
+      className="absolute top-11 left-1/2 z-10 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-border/70 bg-card/95 py-1 pr-1 pl-3 text-xs shadow-lg shadow-brand/15 ring-1 ring-black/[0.04] backdrop-blur dark:ring-white/[0.06]"
     >
       <span className="flex items-center gap-1.5 truncate font-medium text-brand-dark">
         <PencilIcon className="size-3.5 shrink-0" />
@@ -512,7 +512,7 @@ function EditModeBar({ editor, screenName, besidePanel }: { editor: InlineEditor
         type="button"
         size="sm"
         onClick={editor.exit}
-        className="h-6 shrink-0 rounded-full bg-brand px-2.5 text-[11px] text-white hover:bg-brand-dark"
+        className="h-6 shrink-0 rounded-full bg-brand px-2.5 text-[11px] text-white hover:bg-brand-deep"
       >
         Done
       </Button>
@@ -532,7 +532,7 @@ function SelectionToolbar({ style, canEdit, onEdit }: { style: React.CSSProperti
       aria-label="Screen actions"
       onPointerDown={(e) => e.stopPropagation()}
       style={style}
-      className="absolute z-10 flex -translate-x-1/2 -translate-y-full items-center gap-0.5 rounded-full border border-white/70 bg-white p-1 shadow-lg shadow-brand/15 ring-1 ring-black/[0.04]"
+      className="absolute z-10 flex -translate-x-1/2 -translate-y-full items-center gap-0.5 rounded-full border border-border/70 bg-card p-1 shadow-lg shadow-brand/15 ring-1 ring-black/[0.04] dark:ring-white/[0.06]"
     >
       {actions.map(({ label, icon: Icon, disabled, onClick }) => (
         <ToolButton key={label} label={label} size="icon-sm" disabled={disabled} onClick={onClick}>
@@ -546,7 +546,7 @@ function SelectionToolbar({ style, canEdit, onEdit }: { style: React.CSSProperti
 function CanvasEmptyState({ activity }: { activity: string | null }) {
   return (
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
-      <div className="max-w-xs rounded-3xl border border-white/70 bg-white/80 p-6 text-center shadow-[0_12px_40px_-20px_rgba(76,29,149,0.35)] backdrop-blur">
+      <div className="max-w-xs rounded-3xl border border-border/70 bg-card/80 p-6 text-center shadow-[0_12px_40px_-20px_rgba(76,29,149,0.35)] backdrop-blur">
         <span className="mx-auto flex size-11 items-center justify-center rounded-2xl bg-linear-to-br from-brand/15 to-brand-accent/15 text-brand">
           {activity ? <Spinner className="size-5" aria-hidden /> : <LayoutGridIcon className="size-5" />}
         </span>
@@ -657,7 +657,7 @@ function ScreenFrame({
                     onClick={onToggleEditing}
                     className={cn(
                       "flex size-5.5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-brand/10 hover:text-brand-dark disabled:pointer-events-none disabled:opacity-40",
-                      editing && "bg-brand text-white hover:bg-brand-dark hover:text-white"
+                      editing && "bg-brand text-white hover:bg-brand-deep hover:text-white"
                     )}
                   />
                 }
@@ -712,7 +712,7 @@ function ScreenFrame({
                 size="sm"
                 disabled={retrying || syncing}
                 onClick={() => onRetry(screen.id)}
-                className="h-7 rounded-full bg-brand px-3 text-xs text-white hover:bg-brand-dark"
+                className="h-7 rounded-full bg-brand px-3 text-xs text-white hover:bg-brand-deep"
               >
                 {retrying ? <Loader2Icon className="size-3.5 animate-spin" /> : <RotateCcwIcon className="size-3.5" />}
                 {retrying ? "Retrying" : "Retry"}

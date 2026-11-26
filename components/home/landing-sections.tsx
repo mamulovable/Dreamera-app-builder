@@ -124,7 +124,7 @@ function Eyebrow({ children }: { children: string }) {
 export function HeroIntro() {
   return (
     <div className="mx-auto flex max-w-3xl flex-col items-center text-center">
-      <span className="mb-7 inline-flex items-center rounded-full border border-white/70 bg-white/60 px-4 py-1.5 text-xs font-medium text-brand-dark shadow-[0_4px_20px_-6px_rgba(124,58,237,0.35)] backdrop-blur-md">
+      <span className="mb-7 inline-flex items-center rounded-full border border-border/70 bg-card/60 px-4 py-1.5 text-xs font-medium text-brand-dark shadow-[0_4px_20px_-6px_rgba(124,58,237,0.35)] backdrop-blur-md">
         Your dream. Our AI. Your creation.
       </span>
 
@@ -209,7 +209,7 @@ function StepsSection() {
 function FeatureStage() {
   return (
     <section id="why" className="scroll-mt-28">
-      <div className="relative overflow-hidden rounded-[2rem] border border-white/70 bg-white/45 px-5 py-12 shadow-[0_40px_100px_-48px_rgba(76,29,149,0.45)] backdrop-blur-xl sm:rounded-[2.5rem] sm:px-10 sm:py-16 lg:px-14">
+      <div className="relative overflow-hidden rounded-[2rem] border border-border/70 bg-card/45 px-5 py-12 shadow-[0_40px_100px_-48px_rgba(76,29,149,0.45)] backdrop-blur-xl sm:rounded-[2.5rem] sm:px-10 sm:py-16 lg:px-14">
         <div
           aria-hidden
           className="pointer-events-none absolute -top-24 -left-16 size-72 rounded-full bg-brand/20 blur-3xl"
@@ -290,7 +290,7 @@ function PossibilitiesSection() {
         {POSSIBILITIES.map(({ icon: Icon, title, body }) => (
           <li
             key={title}
-            className="flex items-start gap-3 rounded-2xl border border-border/50 bg-white/50 px-4 py-4 backdrop-blur-sm"
+            className="flex items-start gap-3 rounded-2xl border border-border/50 bg-card/50 px-4 py-4 backdrop-blur-sm"
           >
             <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-brand/15 to-brand-accent/20 text-brand-dark">
               <Icon className="size-4" />
@@ -336,7 +336,7 @@ function LandingPricing() {
       </div>
 
       <div className="mx-auto mt-12 grid max-w-4xl items-stretch gap-5 md:grid-cols-2">
-        <article className="flex flex-col gap-6 rounded-[2rem] border border-white/80 bg-white/70 p-7 shadow-[0_24px_60px_-36px_rgba(76,29,149,0.35)] backdrop-blur-xl">
+        <article className="flex flex-col gap-6 rounded-[2rem] border border-border/70 bg-card/70 p-7 shadow-[0_24px_60px_-36px_rgba(76,29,149,0.35)] backdrop-blur-xl">
           <div>
             <h3 className="text-lg font-semibold tracking-tight">{PLANS.free.name}</h3>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -365,7 +365,7 @@ function LandingPricing() {
           </ul>
         </article>
 
-        <article className="relative flex flex-col gap-6 overflow-hidden rounded-[2rem] bg-linear-to-br from-brand to-brand-dark p-7 text-white shadow-xl shadow-brand/30">
+        <article className="relative flex flex-col gap-6 overflow-hidden rounded-[2rem] bg-linear-to-br from-brand to-brand-deep p-7 text-white shadow-xl shadow-brand/30">
           <div
             aria-hidden
             className="pointer-events-none absolute -top-16 -right-10 size-48 rounded-full bg-brand-accent/30 blur-3xl"
@@ -417,7 +417,7 @@ function LandingPricing() {
 
 export function ClosingCta() {
   return (
-    <section className="relative overflow-hidden rounded-[2.5rem] border border-white/70 bg-white/55 px-6 py-16 text-center shadow-[0_40px_100px_-48px_rgba(76,29,149,0.4)] backdrop-blur-xl sm:px-12 sm:py-20">
+    <section className="relative overflow-hidden rounded-[2.5rem] border border-border/70 bg-card/55 px-6 py-16 text-center shadow-[0_40px_100px_-48px_rgba(76,29,149,0.4)] backdrop-blur-xl sm:px-12 sm:py-20">
       <div
         aria-hidden
         className="pointer-events-none absolute -top-20 left-1/2 size-72 -translate-x-1/2 rounded-full bg-brand/25 blur-3xl"

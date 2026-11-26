@@ -48,7 +48,7 @@ const FEATURES: { label: string; free: string | boolean; pro: string | boolean }
   { label: "App stores", free: false, pro: "Export for iOS and Android" },
 ]
 
-/** `checkout` is set when the browser has just come back from OPay. `reference` is that payment. */
+/** `checkout` is set when the browser has just come back from Bachs. `reference` is that checkout. */
 export function PricingPlans({ checkout, reference, canceled }: { checkout: boolean; reference: string | null; canceled: boolean }) {
   const { user, isPending, refresh } = useAuth()
   const { redirect, pending, error: redirectError } = useBillingRedirect()
@@ -61,8 +61,8 @@ export function PricingPlans({ checkout, reference, canceled }: { checkout: bool
 
   const isPro = user?.plan === "pro"
 
-  // OPay tells us by callback, which can land a moment after the browser is back.
-  // Asking OPay directly covers the case where the callback has not arrived yet.
+  // Bachs tells us by webhook, which can land a moment after the browser is back.
+  // Reading the checkout from Bachs covers the case where the webhook has not arrived yet.
   React.useEffect(() => {
     if (!waitingForPayment) return
     if (isPro) return setWaitingForPayment(false)
@@ -103,10 +103,14 @@ export function PricingPlans({ checkout, reference, canceled }: { checkout: bool
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action }),
     }).catch(() => null)
+    const body = await response?.json().catch(() => null)
+    if (response?.ok && body?.url) {
+      window.location.href = body.url
+      return
+    }
     if (response?.ok) {
       await refresh()
     } else {
-      const body = await response?.json().catch(() => null)
       setChangeError(body?.error ?? "Couldn't reach the server. Check your connection and try again.")
     }
     setChanging(false)
@@ -201,9 +205,9 @@ export function PricingPlans({ checkout, reference, canceled }: { checkout: bool
                     Keep Pro
                   </Button>
                 ) : (
-                  <Button className="h-11 w-full rounded-full bg-white text-brand-dark hover:bg-white/90" disabled={pending} onClick={() => void redirect("upgrade")}>
+                  <Button className="h-11 w-full rounded-full bg-white text-brand-dark hover:bg-white/90" disabled={pending} onClick={() => void redirect("manage")}>
                     {pending ? <Loader2Icon className="animate-spin" /> : <SparklesIcon />}
-                    Renew Pro
+                    Manage billing
                   </Button>
                 )}
                 {endsOn && (
@@ -269,7 +273,7 @@ function PlanCard({
         "relative flex flex-col gap-6 rounded-[2rem] p-7",
         featured
           ? "bg-brand text-white shadow-xl shadow-brand/30"
-          : "border border-border/60 bg-white/70 shadow-[0_8px_32px_-12px_rgba(76,29,149,0.15)] backdrop-blur-xl"
+          : "border border-border/60 bg-card/70 shadow-[0_8px_32px_-12px_rgba(76,29,149,0.15)] backdrop-blur-xl"
       )}
     >
       <div>
