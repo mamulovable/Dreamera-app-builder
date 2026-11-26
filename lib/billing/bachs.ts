@@ -1,6 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto"
 
-import { and, eq, ne } from "drizzle-orm"
+import { and, desc, eq, ne, or } from "drizzle-orm"
 
 import { billingPayments, creditTransactions, db, users } from "@/db"
 import { endProPlan, grantMonthlyCredits } from "@/lib/billing/credits"
@@ -148,7 +148,11 @@ async function bachsFetch<T>(path: string, init?: { method?: string; body?: stri
   const payload = (await response.json().catch(() => null)) as (T & { error_code?: string }) | null
   if (!response.ok || !payload) {
     console.error("Bachs request failed", path, response.status, payload?.error_code)
-    throw new BillingError("We couldn't reach our payment provider. Please try again.", 502)
+    const status = response.status === 404 ? 404 : 502
+    throw new BillingError(
+      status === 404 ? "The checkout could not be found." : "We couldn't reach our payment provider. Please try again.",
+      status
+    )
   }
   return payload
 }
@@ -223,6 +227,15 @@ async function applySubscription(payload: SubscriptionPayload, eventAt: Date) {
     const [locked] = await tx.select().from(users).where(eq(users.id, user.id)).for("update")
     if (!locked) return
     if (locked.billingSyncedAt && locked.billingSyncedAt > eventAt) return
+    const differentSubscription =
+      locked.stripeSubscriptionId?.startsWith("sub_") && locked.stripeSubscriptionId !== state.subscriptionId
+    if (differentSubscription) {
+      // A second checkout must not turn Pro off, or replace a period that already runs longer.
+      if (!keepsAccess) return
+      const currentEnd = locked.currentPeriodEnd?.getTime() ?? 0
+      const nextEnd = periodEnd?.getTime() ?? 0
+      if (nextEnd <= currentEnd) return
+    }
 
     if (keepsAccess) {
       await tx
@@ -348,11 +361,13 @@ export async function createCheckoutUrl(userId: number) {
     console.error("Bachs checkout was not created")
     throw new BillingError("We couldn't open the checkout. Please try again.", 502)
   }
+  const slug = new URL(checkout.checkout_url).pathname.split("/").filter(Boolean).pop() || ""
   await db
     .insert(billingPayments)
     .values({
       userId: user.id,
       reference: checkout.checkout_id,
+      orderNo: slug && slug !== checkout.checkout_id ? slug : null,
       amount: decimalToMinor(checkout.amount),
       currency: (checkout.currency || "USD").toUpperCase(),
       status: "pending",
@@ -369,18 +384,48 @@ export async function manageBillingUrl(userId: number) {
   return createCheckoutUrl(userId)
 }
 
+async function readCheckout(id: string) {
+  try {
+    return await bachsFetch<CheckoutSession>(`/v1/checkout-sessions/${encodeURIComponent(id)}`)
+  } catch (cause) {
+    if (cause instanceof BillingError && cause.status === 404) return null
+    throw cause
+  }
+}
+
 /** Reads the checkout from Bachs and applies it. Safe to call more than once. The redirect alone is not trusted. */
 export async function confirmCheckout(userId: number, checkoutId: string) {
-  if (!/^chk_[A-Za-z0-9_-]+$/.test(checkoutId)) return { status: "unknown" as const }
-  const session = await bachsFetch<CheckoutSession>(`/v1/checkout-sessions/${checkoutId}`)
-  if (asString(session.metadata?.user_id) !== String(userId)) return { status: "unknown" as const }
+  if (!/^[A-Za-z0-9_-]{6,128}$/.test(checkoutId)) return { status: "unknown" as const }
+  let session = await readCheckout(checkoutId)
+  let reference = checkoutId
+  if (!session || asString(session.metadata?.user_id) !== String(userId)) {
+    const [matched] = await db
+      .select()
+      .from(billingPayments)
+      .where(and(eq(billingPayments.userId, userId), or(eq(billingPayments.reference, checkoutId), eq(billingPayments.orderNo, checkoutId))))
+      .limit(1)
+    const [latest] = matched
+      ? [matched]
+      : await db
+          .select()
+          .from(billingPayments)
+          .where(eq(billingPayments.userId, userId))
+          .orderBy(desc(billingPayments.createdAt))
+          .limit(1)
+    const recent = latest?.createdAt && Date.now() - latest.createdAt.getTime() < 24 * 60 * 60 * 1000
+    if (!matched && !recent) return { status: "unknown" as const }
+    if (!latest?.reference.startsWith("chk_")) return { status: "unknown" as const }
+    session = await readCheckout(latest.reference)
+    reference = latest.reference
+    if (!session || asString(session.metadata?.user_id) !== String(userId)) return { status: "unknown" as const }
+  }
 
   const terminal = session.status === "expired" || session.status === "cancelled" || session.payment_status === "canceled"
   if (terminal) {
     await db
       .update(billingPayments)
       .set({ status: "failed" })
-      .where(and(eq(billingPayments.reference, checkoutId), ne(billingPayments.status, "success")))
+      .where(and(eq(billingPayments.reference, reference), ne(billingPayments.status, "success")))
     return { status: "failed" as const }
   }
 
@@ -398,7 +443,7 @@ export async function confirmCheckout(userId: number, checkoutId: string) {
     await db
       .update(billingPayments)
       .set({ status: "success", orderNo: subscriptionId, paidAt: new Date() })
-      .where(eq(billingPayments.reference, checkoutId))
+      .where(eq(billingPayments.reference, reference))
   }
   const invoiceId = session.charge?.invoice?.invoice_id
   if (invoiceId) await grantMonthlyCredits(userId, `bachs:${invoiceId}`)
@@ -437,6 +482,27 @@ export async function handleBachsWebhook(raw: string, headers: Headers) {
     case "invoice.payment_failed":
       console.error("Bachs renewal payment failed", data.invoice_id, data.subscription?.subscription_id)
       return
+    case "checkout.completed":
+    case "collection.succeeded": {
+      const checkoutId = asString(data.checkout_id)
+      if (!checkoutId) return
+      const session = await readCheckout(checkoutId)
+      const subscriptionId = session?.charge?.subscription_id || session?.charge?.invoice?.subscription_id
+      if (subscriptionId) {
+        const subscription = await bachsFetch<SubscriptionPayload>(`/v1/subscriptions/${subscriptionId}`)
+        await applySubscription(subscription, eventAt)
+      }
+      const invoiceId = session?.charge?.invoice?.invoice_id
+      const userId = Number(asString(session?.metadata?.user_id))
+      if (invoiceId && Number.isInteger(userId) && userId > 0) await grantMonthlyCredits(userId, `bachs:${invoiceId}`)
+      if (checkoutId && subscriptionId) {
+        await db
+          .update(billingPayments)
+          .set({ status: "success", orderNo: subscriptionId, paidAt: eventAt })
+          .where(eq(billingPayments.reference, checkoutId))
+      }
+      return
+    }
     case "checkout.expired":
       if (data.checkout_id) {
         await db
