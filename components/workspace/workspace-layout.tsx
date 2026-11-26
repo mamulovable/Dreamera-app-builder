@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/resizable"
 import { AiDialog } from "@/components/workspace/ai-dialog"
 import { BackendDialog } from "@/components/workspace/backend-dialog"
+import { SecretsDialog } from "@/components/workspace/secrets-dialog"
 import { CanvasPanel } from "@/components/workspace/canvas-panel"
 import { ChatPanel, type ChatAsset } from "@/components/workspace/chat-panel"
 import { DownloadDialog } from "@/components/workspace/download-dialog"
@@ -103,6 +104,7 @@ export function WorkspaceLayout({
   const [projectTitle, setProjectTitle] = React.useState(project.title)
   const [aiDialogOpen, setAiDialogOpen] = React.useState(false)
   const [backendDialogOpen, setBackendDialogOpen] = React.useState(backendConnectResult !== null)
+  const [secretsDialogOpen, setSecretsDialogOpen] = React.useState(false)
   const [connectNotice, setConnectNotice] = React.useState(backendConnectResult)
   const [shareDialogOpen, setShareDialogOpen] = React.useState(false)
   const [downloadDialogOpen, setDownloadDialogOpen] = React.useState(false)
@@ -150,6 +152,7 @@ export function WorkspaceLayout({
       }}
       onOpenBackend={() => setBackendDialogOpen(true)}
       onOpenAi={() => setAiDialogOpen(true)}
+      onOpenSecrets={() => setSecretsDialogOpen(true)}
       onShare={() => setShareDialogOpen(true)}
       onDownload={() => setDownloadDialogOpen(true)}
       onPushToGitHub={() => setGithubDialogOpen(true)}
@@ -232,6 +235,23 @@ export function WorkspaceLayout({
       onDisconnect={() => agent.changeBackend("DELETE")}
     />
   )
+
+  React.useEffect(() => {
+    if (!agent.secretRequest || readOnly) return
+    setSecretsDialogOpen(true)
+  }, [agent.secretRequest, readOnly])
+
+  const secretsDialog = !readOnly ? (
+    <SecretsDialog
+      projectId={project.id}
+      open={secretsDialogOpen}
+      onOpenChange={(open) => {
+        setSecretsDialogOpen(open)
+        if (!open) agent.clearSecretRequest()
+      }}
+      request={agent.secretRequest}
+    />
+  ) : null
   const chat = <ChatPanel agent={agent} assets={assets} editor={editor} platform={project.platform} projectId={project.id} />
   // Rebuilt only when what the running app sees changes: not for code still streaming in,
   // or for the active theme, which reaches it on its own so switching never reloads the app.
@@ -305,6 +325,7 @@ export function WorkspaceLayout({
         {header}
         {aiDialog}
         {backendDialog}
+        {secretsDialog}
         {exportDialogs}
         <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
           <ResizablePanel id="chat" defaultSize="24%" minSize={280} maxSize="40%">
@@ -328,6 +349,7 @@ export function WorkspaceLayout({
       {header}
       {aiDialog}
       {backendDialog}
+      {secretsDialog}
       {exportDialogs}
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1">

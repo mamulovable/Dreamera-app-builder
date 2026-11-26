@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
-import { DeleteProjectButton, SetPublicButton } from "@/components/admin/admin-actions"
+import { DeleteProjectButton, DeleteSecretButton, SetPublicButton } from "@/components/admin/admin-actions"
 import { AdminPageHeader, DataTable, EmptyNote, Panel, StatusBadge, formatWhen } from "@/components/admin/admin-ui"
 import { defaultTokenPrice, readBuilderRoute } from "@/lib/agent/provider-settings"
 import { getAdminProject, getProjectBuilderTokens, PLATFORM_LABELS, STATUS_STYLES } from "@/lib/admin"
@@ -29,8 +29,20 @@ export default async function AdminProjectDetailPage({ params }: Props) {
     route.outputPricePerMillion === 0 &&
     Object.keys(route.modelPrices).length === 0
 
-  const { project, ownerEmail, ownerName, ownerId, screens, shareCount, backend, github, appBuilds, webPublish, activeBuild } =
-    detail
+  const {
+    project,
+    ownerEmail,
+    ownerName,
+    ownerId,
+    screens,
+    shareCount,
+    backend,
+    github,
+    appBuilds,
+    webPublish,
+    activeBuild,
+    secrets,
+  } = detail
 
   return (
     <div className="space-y-6">
@@ -148,6 +160,25 @@ export default async function AdminProjectDetailPage({ params }: Props) {
           </dl>
         </Panel>
       </div>
+
+      <Panel title="External API keys">
+        {secrets.length === 0 ? (
+          <EmptyNote>No external API keys stored for this project. Values are never shown here.</EmptyNote>
+        ) : (
+          <DataTable headers={["Name", "Label", "Updated", ""]}>
+            {secrets.map((secret) => (
+              <tr key={secret.name}>
+                <td className="px-3 py-2.5 font-mono text-xs font-medium">{secret.name}</td>
+                <td className="px-3 py-2.5">{secret.label || "—"}</td>
+                <td className="px-3 py-2.5 text-muted-foreground">{formatWhen(secret.updatedAt)}</td>
+                <td className="px-3 py-2.5 text-right">
+                  <DeleteSecretButton projectId={project.id} name={secret.name} />
+                </td>
+              </tr>
+            ))}
+          </DataTable>
+        )}
+      </Panel>
 
       <Panel title="Screens">
         {screens.length === 0 ? (

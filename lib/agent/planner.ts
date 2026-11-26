@@ -27,6 +27,7 @@ import { BACKEND_SERVICES } from "@/lib/backend-protocol"
 import { screenLimitMessage } from "@/lib/billing/credits"
 import { getBackendStatus, setUpBackend } from "@/lib/cloudhike/backend"
 import { buildCost, PLANS } from "@/lib/plans"
+import { listSecretNames, normalizeSecretName } from "@/lib/project-secrets"
 import { isHtmlWebsite, MAX_PROJECT_NAME_LENGTH } from "@/lib/projects"
 import { HEX_COLOR, themeFromDesign } from "@/lib/themes"
 
@@ -464,10 +465,56 @@ const readProjectFile = tool<typeof readFileSchema, PlannerContext>({
   },
 })
 
+const listSecretNamesTool = tool<z.ZodObject<Record<string, never>>, PlannerContext>({
+  name: "list_secret_names",
+  description:
+    "List the external API key names already stored for this app (names and labels only — never values).",
+  parameters: z.object({}),
+  async execute(_input, runContext) {
+    const ctx = runContext!.context
+    const secrets = await listSecretNames(ctx.projectId)
+    if (secrets.length === 0) return "No external API keys are stored yet."
+    return secrets.map((secret) => `${secret.name}${secret.label ? ` (${secret.label})` : ""}`).join(", ")
+  },
+})
+
+const requestSecretSchema = z.object({
+  name: z.string().describe("Uppercase env-style name, e.g. OPENWEATHER_API_KEY"),
+  label: z.string().describe("Short human label, e.g. OpenWeather"),
+  reason: z.string().describe("One sentence why this app needs the key"),
+})
+
+const requestSecret = tool<typeof requestSecretSchema, PlannerContext>({
+  name: "request_secret",
+  description:
+    "Open the API keys dialog for a third-party key (weather, maps, etc.). Use proactively when the app needs live external data — even if they didn't ask for an API. Never ask them to paste the key in chat. You never receive the value.",
+  parameters: requestSecretSchema,
+  async execute({ name, label, reason }, runContext) {
+    const ctx = runContext!.context
+    if (isHtmlWebsite(ctx.platform)) {
+      return "Website v2 can't store or proxy external API keys yet. Explain that in plain words and keep the site on sample or typed-in data."
+    }
+    const normalized = normalizeSecretName(name)
+    if (!normalized) {
+      return "Key name rejected. Use an uppercase name like OPENWEATHER_API_KEY (letters, numbers, underscores)."
+    }
+    const existing = await listSecretNames(ctx.projectId)
+    if (existing.some((secret) => secret.name === normalized)) {
+      return `${normalized} is already stored. Tell the person they can replace it from Keys at the top of the workspace, then wire the screen with callExternalApi from "@/lib/external".`
+    }
+    ctx.run.emit({
+      type: "secret-request",
+      name: normalized,
+      label: label.trim() || normalized,
+    })
+    return `The API keys dialog is open for ${normalized} (${reason.trim() || "external API"}). In your reply, give a short get-the-key guide (provider site / signup / copy key / paste under Keys). Never ask them to paste it in chat. After they save it, wire screens with callExternalApi from "@/lib/external" using secretName ${normalized}.`
+  },
+})
+
 function toolsForTurn(ctx: PlannerContext) {
   if (ctx.mode === "chat") {
     const hasFiles = ctx.builtScreens > 0 || Boolean(ctx.plan?.components?.length) || Boolean(ctx.plan?.site?.css)
-    return hasFiles ? [readProjectFile] : []
+    return hasFiles ? [readProjectFile, listSecretNamesTool] : [listSecretNamesTool]
   }
   if (ctx.mode === "plan") {
     if (ctx.builtScreens === 0) {
@@ -476,9 +523,9 @@ function toolsForTurn(ctx: PlannerContext) {
       }
       return ctx.plan ? [proposePlan, askPlanQuestions, confirmPlan] : [proposePlan, askPlanQuestions]
     }
-    return [askPlanQuestions, proposeChangePlan, readProjectFile]
+    return [askPlanQuestions, proposeChangePlan, readProjectFile, listSecretNamesTool, requestSecret]
   }
-  return [proposePlan, confirmPlan, updateApp, setTheme, setupBackend]
+  return [proposePlan, confirmPlan, updateApp, setTheme, setupBackend, listSecretNamesTool, requestSecret]
 }
 
 const TOOL_STATUS: Record<string, string> = {
@@ -490,6 +537,8 @@ const TOOL_STATUS: Record<string, string> = {
   ask_plan_questions: "Preparing planning questions…",
   propose_change_plan: "Outlining your change plan…",
   read_project_file: "Inspecting project files…",
+  list_secret_names: "Checking stored API keys…",
+  request_secret: "Asking for an API key…",
 }
 
 function toInputItems(thread: Pick<ChatMessage, "role" | "content">[]): AgentInputItem[] {

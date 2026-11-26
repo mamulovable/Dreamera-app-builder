@@ -350,6 +350,8 @@ export type AgentEvent =
   | { type: "screen"; screen: ProjectScreen }
   | { type: "code-delta"; screenId: string; delta: string }
   | { type: "backend"; backend: BackendStatus }
+  /** Opens the API keys dialog so the person can paste a named secret (never in chat). */
+  | { type: "secret-request"; name: string; label: string }
   | { type: "error"; message: string }
   /** The person hit a plan limit, so they're shown what upgrading gets them. */
   | { type: "upgrade"; reason: UpgradeReason }

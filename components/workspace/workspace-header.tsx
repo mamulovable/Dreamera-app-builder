@@ -11,6 +11,7 @@ import {
   EyeIcon,
   GithubIcon,
   GlobeIcon,
+  KeyRoundIcon,
   Loader2Icon,
   PencilIcon,
   RocketIcon,
@@ -57,6 +58,7 @@ export function WorkspaceHeader({
   onRenamed,
   onOpenBackend,
   onOpenAi,
+  onOpenSecrets,
   onShare,
   onDownload,
   onPushToGitHub,
@@ -78,6 +80,7 @@ export function WorkspaceHeader({
   onRenamed?: (name: string) => void
   onOpenBackend: () => void
   onOpenAi: () => void
+  onOpenSecrets: () => void
   onShare: () => void
   onDownload: () => void
   onPushToGitHub: () => void
@@ -135,6 +138,19 @@ export function WorkspaceHeader({
 
         {!readOnly && showAi && <AiButton enabled={aiEnabled} onClick={onOpenAi} />}
         {!readOnly && <BackendButton backend={backend} onClick={onOpenBackend} />}
+        {!readOnly && (
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-8 rounded-full px-2.5 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+            title="External API keys"
+            aria-label="External API keys"
+            onClick={onOpenSecrets}
+          >
+            <KeyRoundIcon className="size-4" />
+            <span className="hidden lg:inline">Keys</span>
+          </Button>
+        )}
 
         <DropdownMenu>
           <DropdownMenuTrigger

@@ -281,6 +281,36 @@ export const projectBackends = pgTable("project_backends", {
     .$onUpdate(() => new Date()),
 });
 
+/**
+ * Third-party API keys for a generated app. Values are sealed; names are what
+ * the workspace, agent, and admin see. Used by Dreamera's external proxy so the
+ * app never ships the key.
+ */
+export const projectSecrets = pgTable(
+  "project_secrets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    /** Uppercase env-style name, e.g. OPENWEATHER_API_KEY. */
+    name: text("name").notNull(),
+    /** Encrypted with `lib/cloudhike/crypto.ts`. Never select for admin/list UIs. */
+    value: text("value").notNull(),
+    /** Short human label shown in the secrets dialog. */
+    label: text("label"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    uniqueIndex("project_secrets_project_id_name_idx").on(table.projectId, table.name),
+    index("project_secrets_project_id_idx").on(table.projectId),
+  ]
+);
+
 /** Someone a project was shared with. They can open it and download it, but only its owner can change it. */
 export const projectShares = pgTable(
   "project_shares",
@@ -525,6 +555,7 @@ export const adminAuditAction = pgEnum("admin_audit_action", [
   "delete-project",
   "fail-build",
   "set-builder",
+  "delete-secret",
 ]);
 
 /** What an operator did in /admin. Tokens and billing ids are never written here. */
@@ -553,6 +584,7 @@ export type ProjectAsset = typeof projectAssets.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type Screen = typeof screens.$inferSelect;
 export type ProjectBackend = typeof projectBackends.$inferSelect;
+export type ProjectSecret = typeof projectSecrets.$inferSelect;
 export type ProjectPublishing = typeof projectPublishing.$inferSelect;
 export type AppBuild = typeof appBuilds.$inferSelect;
 export type WebPublish = typeof webPublishes.$inferSelect;

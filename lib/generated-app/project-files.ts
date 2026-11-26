@@ -27,7 +27,14 @@ export const ALLOWED_PACKAGES = [
 ] as const
 
 /** Project modules generated screens may import. */
-export const ALLOWED_PROJECT_MODULES = ["@/theme", "@/lib/backend", "@/data/schema", "@/lib/layout", "@/lib/ai"] as const
+export const ALLOWED_PROJECT_MODULES = [
+  "@/theme",
+  "@/lib/backend",
+  "@/data/schema",
+  "@/lib/layout",
+  "@/lib/ai",
+  "@/lib/external",
+] as const
 
 /** Project modules shared components may import. Screens hand them their data, so they can't reach the backend. */
 export const ALLOWED_COMPONENT_MODULES = ["@/theme", "@/data/schema", "@/lib/layout"] as const
@@ -913,6 +920,46 @@ function aiRuntimeConfig(ai: GeneratedAi | null | undefined) {
   return { enabled, apiUrl: enabled && ai ? `${origin}/api/apps/${ai.projectId}/ai` : "" }
 }
 
+/** Server proxy for stored third-party API keys. The key never ships in the app. */
+function externalClientSource(projectId: string | null | undefined) {
+  const origin = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "")
+  const apiUrl = projectId && origin ? `${origin}/api/apps/${projectId}/external` : ""
+  return `const externalConfig = ${JSON.stringify({ apiUrl })} as { apiUrl: string };
+
+export type ExternalAuth =
+  | { type: "bearer" }
+  | { type: "header"; name: "authorization" | "x-api-key" | "api-key" }
+  | { type: "query"; name: string };
+
+export type ExternalRequest = {
+  /** Stored key name, e.g. OPENWEATHER_API_KEY */
+  secretName: string;
+  url: string;
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  headers?: Record<string, string>;
+  body?: unknown;
+  auth?: ExternalAuth;
+};
+
+/**
+ * Calls a third-party HTTPS API through Dreamera, which attaches the stored key.
+ * Never put API keys in screen code. Throws Error with a message safe to show.
+ */
+export async function callExternalApi(request: ExternalRequest) {
+  if (!externalConfig.apiUrl) throw new Error("External API calls aren't set up for this app yet.");
+  const response = await fetch(externalConfig.apiUrl, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  const data = await response.json().catch(() => null);
+  const message = data && typeof data.message === "string" ? data.message : "";
+  if (!response.ok) throw new Error(message || "External API call failed. Try again.");
+  return data as { ok: boolean; status: number; data: unknown };
+}
+`
+}
+
 /** The shared files for a plan. Plans built before themes existed have none of the themed ones. */
 export function generatedAppFiles(plan: AppPlan | null, ai?: GeneratedAi | null): PreviewFile[] {
   if (plan?.site?.css && plan.site.js) {
@@ -938,6 +985,7 @@ export function generatedAppFiles(plan: AppPlan | null, ai?: GeneratedAi | null)
     { path: "lib/backend/local.ts", code: BACKEND_LOCAL_FILE },
     { path: "lib/backend/cloudhike.ts", code: BACKEND_CLOUDHIKE_FILE },
     { path: "lib/ai.ts", code: aiClientSource(aiRuntimeConfig(ai)) },
+    { path: "lib/external.ts", code: externalClientSource(ai?.projectId) },
     ...(plan.components ?? []).map((component) => ({ path: componentFilePath(component.name), code: component.code })),
   ]
 }
