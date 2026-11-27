@@ -18,6 +18,7 @@ import { assertCanUseAgent, chargeForBuild, chargeForScreenRetry, PlanLimitError
 import { isAgentMode, isHtmlWebsite, MAX_PROMPT_LENGTH, type AgentMode } from "@/lib/projects"
 import { originFromRequest } from "@/lib/jobs"
 import { getCurrentUser, type SessionUser } from "@/lib/session"
+import { getObjectUrl } from "@/lib/storage"
 
 // Planning takes seconds. Following a build's stream can take a few minutes. Hobby caps this at 300 seconds.
 export const maxDuration = 300
@@ -174,11 +175,17 @@ function readAssetsContext(value: unknown): MessageAsset[] {
 
 /** One planner turn, then the build if the person confirmed the plan or asked to change the built app. */
 async function respond(run: ProjectRun, project: Project, user: SessionUser, origin: string | null) {
-  const assets = await db
-    .select({ fileName: projectAssets.fileName })
+  const assetRows = await db
+    .select({ fileName: projectAssets.fileName, storageKey: projectAssets.storageKey })
     .from(projectAssets)
     .where(eq(projectAssets.projectId, project.id))
-  const { confirmed, plan, changes } = await runPlannerTurn(run, project, assets.map((a) => a.fileName), {
+  const assets = await Promise.all(
+    assetRows.map(async (asset) => ({
+      fileName: asset.fileName,
+      url: await getObjectUrl(asset.storageKey).catch(() => null),
+    }))
+  )
+  const { confirmed, plan, changes } = await runPlannerTurn(run, project, assets, {
     plan: user.plan,
     credits: user.credits,
   })

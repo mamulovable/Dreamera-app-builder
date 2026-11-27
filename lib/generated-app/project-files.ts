@@ -944,6 +944,8 @@ export type ExternalRequest = {
 /**
  * Calls a third-party HTTPS API through Dreamera, which attaches the stored key.
  * Never put API keys in screen code. Throws Error with a message safe to show.
+ * OpenWeather: auth { type: "query", name: "appid" }. OpenRouter: auth { type: "bearer" }.
+ * Binary image responses come back as data.dataUrl (data:image/...;base64,...).
  */
 export async function callExternalApi(request: ExternalRequest) {
   if (!externalConfig.apiUrl) throw new Error("External API calls aren't set up for this app yet.");
@@ -955,7 +957,7 @@ export async function callExternalApi(request: ExternalRequest) {
   const data = await response.json().catch(() => null);
   const message = data && typeof data.message === "string" ? data.message : "";
   if (!response.ok) throw new Error(message || "External API call failed. Try again.");
-  return data as { ok: boolean; status: number; data: unknown };
+  return data as { ok: boolean; status: number; contentType?: string; data: unknown };
 }
 `
 }

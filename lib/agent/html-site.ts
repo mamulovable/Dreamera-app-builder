@@ -7,8 +7,8 @@ import { visibleCode } from "@/lib/agent/validate-screen"
 import { generatedImageUrlStart, isImageKitEnabled } from "@/lib/imagekit"
 
 const IMAGE_RULE = isImageKitEnabled()
-  ? `Photographs use <img> with a plain src of the form "${generatedImageUrlStart()}<what the picture shows>/<short-file-name>.jpg". Write the description with %20 for each space, and without commas, slashes, colons, or quote marks. Describe a real picture with no text in it. The home page may use up to 6. Any other page may use up to 3. Every image has a useful alt.`
-  : `Photographs use <img src="https://picsum.photos/seed/<word>/1200/800" alt="...">. The home page may use up to 6. Any other page may use up to 3.`
+  ? `Default photographs use <img> with a plain src of the form "${generatedImageUrlStart()}<what the picture shows>/<short-file-name>.jpg". Write the description with %20 for each space, and without commas, slashes, colons, or quote marks. Describe a real picture with no text in it. Exception: when the person uploaded a photo or pasted an https image URL to use (hero, portrait, gallery), put that exact https URL in src — never replace their photo with a new ImageKit generation URL. The home page may use up to 6 generated photos plus any user-supplied ones. Any other page may use up to 3 generated. Every image has a useful alt.`
+  : `Photographs use <img src="https://picsum.photos/seed/<word>/1200/800" alt="...">, or — when the person supplied a photo/URL — that exact https URL in src. The home page may use up to 6. Any other page may use up to 3.`
 
 const CSS_INSTRUCTIONS = `You are the AppForge site designer. You write the shared stylesheet for one premium marketing website. Reply with only the CSS. No markdown fences and no explanation.
 
@@ -187,7 +187,7 @@ Name: ${screen.name}
 Purpose: ${screen.purpose}
 Key elements:
 ${screen.keyElements.map((element) => `- ${element}`).join("\n")}
-${edit ? `\n# Current file\n${edit.code}\n\n# Requested change\n${edit.request}\n\nMake this change and keep everything else, including image urls already in the file.\n` : ""}
+${edit ? `\n# Current file\n${edit.code}\n\n# Requested change\n${edit.request}\n\nMake this change and keep everything else. Keep image urls already in the file unless the request asks to replace a specific image (hero, portrait, etc.) — then set that <img src> to the exact https URL named in the request (uploaded asset or pasted link). Never swap their photo for an ImageKit/picsum generation URL.\n` : ""}
 Write ${file} now.`
   return writeFile(pageAgent, prompt, (code) => htmlPageProblems(code, plan), signal, onDelta)
 }
