@@ -8,9 +8,11 @@ const BLOCKED_HEADER = /^(authorization|proxy-authorization|cookie|x-api-key|api
 const ALLOWED_AUTH_HEADERS = new Set(["authorization", "x-api-key", "api-key"])
 const ALLOWED_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"])
 const MAX_URL_LENGTH = 2_048
-const MAX_BODY_BYTES = 128 * 1024
-const MAX_RESPONSE_BYTES = 512 * 1024
-const FETCH_TIMEOUT_MS = 20_000
+/** Enough for a compressed photo or base64 image field in a JSON body. */
+const MAX_BODY_BYTES = 4 * 1024 * 1024
+/** OpenRouter / image APIs often return multi‑MB base64 JSON. */
+const MAX_RESPONSE_BYTES = 8 * 1024 * 1024
+const FETCH_TIMEOUT_MS = 90_000
 
 export type ExternalAuth =
   | { type: "bearer" }
@@ -118,6 +120,10 @@ function parseAuth(input: unknown): ExternalAuth {
   return { type: "bearer" }
 }
 
+function isImageContentType(contentType: string) {
+  return /^image\/(png|jpeg|jpg|webp|gif|svg\+xml)/i.test(contentType.split(";")[0].trim())
+}
+
 export async function proxyExternalRequest(secretValue: string, input: {
   url: string
   method?: unknown
@@ -131,7 +137,7 @@ export async function proxyExternalRequest(secretValue: string, input: {
 
   const auth = parseAuth(input.auth)
   const headers = cleanHeaders(input.headers)
-  headers.accept = headers.accept ?? "application/json"
+  headers.accept = headers.accept ?? "application/json, image/*, */*"
 
   if (auth.type === "bearer") headers.authorization = `Bearer ${secretValue}`
   else if (auth.type === "header") headers[auth.name] = secretValue
@@ -140,7 +146,9 @@ export async function proxyExternalRequest(secretValue: string, input: {
   let body: string | undefined
   if (method !== "GET" && method !== "DELETE" && input.body !== undefined) {
     body = typeof input.body === "string" ? input.body : JSON.stringify(input.body)
-    if (Buffer.byteLength(body) > MAX_BODY_BYTES) throw new ExternalProxyError("That request body is too large.", 413)
+    if (Buffer.byteLength(body) > MAX_BODY_BYTES) {
+      throw new ExternalProxyError("That request body is too large. Keep images under about 3 MB.", 413)
+    }
     if (!headers["content-type"] && typeof input.body !== "string") headers["content-type"] = "application/json"
   }
 
@@ -167,25 +175,36 @@ export async function proxyExternalRequest(secretValue: string, input: {
 
   const raw = Buffer.from(await response.arrayBuffer())
   if (raw.byteLength > MAX_RESPONSE_BYTES) {
-    throw new ExternalProxyError("The external API response was too large.", 502)
+    throw new ExternalProxyError("The external API response was too large to return through Dreamera.", 502)
   }
 
   const contentType = response.headers.get("content-type") ?? ""
   let data: unknown = null
-  const text = raw.toString("utf8")
-  if (contentType.includes("application/json") || /^[\[{]/.test(text.trim())) {
-    try {
-      data = JSON.parse(text)
-    } catch {
-      data = text
+
+  // Binary images → data URL so Expo/HTML can show them without a second fetch.
+  if (isImageContentType(contentType) || (!contentType.includes("json") && raw[0] === 0x89 && raw[1] === 0x50)) {
+    const mime = isImageContentType(contentType) ? contentType.split(";")[0].trim() : "image/png"
+    data = {
+      contentType: mime,
+      dataUrl: `data:${mime};base64,${raw.toString("base64")}`,
     }
   } else {
-    data = text
+    const text = raw.toString("utf8")
+    if (contentType.includes("application/json") || /^[\[{]/.test(text.trim())) {
+      try {
+        data = JSON.parse(text)
+      } catch {
+        data = text
+      }
+    } else {
+      data = text
+    }
   }
 
   return {
     ok: response.ok,
     status: response.status,
+    contentType,
     data,
   }
 }

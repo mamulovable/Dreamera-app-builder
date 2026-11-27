@@ -18,6 +18,7 @@ import { isHtmlWebsite, isWebsitePlatform, PLATFORM_LABELS, type AgentMode, type
 import { BASE_THEME_TOKENS, THEME_TOKENS } from "@/lib/themes"
 import { AI_BUILDER_RULES, aiPlannerSection } from "@/lib/agent/ai-doc"
 import type { AppAiAvailability } from "@/lib/ai/types"
+import { API_RECIPES_BUILDER, API_RECIPES_DOC } from "@/lib/api-recipes"
 import { generatedImageUrlStart, isImageKitEnabled } from "@/lib/imagekit"
 
 export type PlannerState = {
@@ -31,11 +32,21 @@ export type PlannerState = {
   builtScreens: number
   rows: { slug?: string; name: string; filePath?: string; code: string | null }[]
   assetNames: string[]
+  /** Project assets with https URLs when available — use these exact URLs in <img src> / Image uri when asked. */
+  assets: { fileName: string; url: string | null }[]
   backend: BackendStatus
   /** Whether this project may call Dreamera AI, and which jobs this server can run. */
   ai: AppAiAvailability
   /** The project owner's AppForge plan, and all the credits they have left. */
   account: { plan: PlanId; credits: number }
+}
+
+function assetsSection(state: PlannerState) {
+  if (state.assets.length === 0 && state.assetNames.length === 0) return ""
+  const lines = state.assets.length
+    ? state.assets.map((a) => (a.url ? `- ${a.fileName}: ${a.url}` : `- ${a.fileName} (no URL yet)`)).join("\n")
+    : state.assetNames.map((name) => `- ${name}`).join("\n")
+  return `- Uploaded project images/files (use the exact https URL as <img src> or Image uri when they ask to put a photo in the hero or page — do not replace with ImageKit/picsum generation URLs):\n${lines}\n- If they attached an image in the latest chat message, that image is also visible to you; when they say use/replace/put this photo, put its attached URL from <attached-assets> into the markup. If they paste an https image URL, use that exact string.\n`
 }
 
 function projectSnapshotSection(state: PlannerState, product: string, unit: string) {
@@ -48,7 +59,7 @@ function projectSnapshotSection(state: PlannerState, product: string, unit: stri
 ${state.originalPrompt ? `- Initial project prompt: "${state.originalPrompt}"\n` : ""}- AppForge plan: ${PLANS[state.account.plan].name}, with ${state.account.credits} credits left. Each new ${unit} costs ${SCREEN_CREDITS} credits and each round of changes ${EDIT_CREDITS}. Chatting and switching themes are free. If a tool reports a plan limit, tell them plainly and never say the work happened.
 - Backend: ${backendDescription(state.backend)}
 - AI: ${state.ai.enabled ? "allowed" : "not allowed"} (text ${state.ai.text ? "ready" : "unavailable"}, speech to text ${state.ai.voice ? "ready" : "unavailable"}, text to speech ${state.ai.speech ? "ready" : "unavailable"}, photos ${state.ai.vision ? "ready" : "unavailable"})
-${state.assetNames.length > 0 ? `- Reference files and images attached to the project: ${state.assetNames.join(", ")}. If the person attached an image in the chat, use its design, layout, content, and colors as direct reference for what they want to build or change.\n` : ""}${builtFiles.length > 0 ? `- Built ${unit} files: ${builtFiles.join(", ")}\n` : ""}- Current plan: ${state.plan ? `\n\`\`\`json\n${JSON.stringify({ ...state.plan, themePackage: undefined, collections: undefined, components: undefined, pendingChanges: undefined }, null, 2)}\n\`\`\`` : "none yet"}
+${assetsSection(state)}${builtFiles.length > 0 ? `- Built ${unit} files: ${builtFiles.join(", ")}\n` : ""}- Current plan: ${state.plan ? `\n\`\`\`json\n${JSON.stringify({ ...state.plan, themePackage: undefined, collections: undefined, components: undefined, pendingChanges: undefined }, null, 2)}\n\`\`\`` : "none yet"}
 ${state.plan?.collections ? `- Data the ${product} stores: ${state.plan.collections.map((c) => `${c.name} (${c.fields.map((f) => f.name).join(", ")})`).join("; ") || "nothing yet"}\n` : ""}${state.plan?.components?.length ? `- Shared components: ${state.plan.components.map((c) => componentDescription(c, state.rows)).join("; ")}\n` : ""}${state.plan?.themePackage ? `- Themes: ${state.plan.themePackage.themes.map((t) => `${t.name} (id "${t.id}", ${t.mode}${t.id === state.plan?.themePackage?.activeThemeId ? ", active" : ""})`).join("; ")}\n` : ""}`
 }
 
@@ -189,7 +200,7 @@ export function plannerInstructions(state: PlannerState) {
 - AppForge plan: ${PLANS[state.account.plan].name}, with ${state.account.credits} credits left. Each new ${unit} costs ${SCREEN_CREDITS} credits and each round of changes ${EDIT_CREDITS}. Chatting and switching themes are free. If a tool reports a plan limit, tell them plainly and never say the work happened.
 - Backend: ${backendDescription(state.backend)}
 - AI: ${state.ai.enabled ? "allowed" : "not allowed"} (text ${state.ai.text ? "ready" : "unavailable"}, speech to text ${state.ai.voice ? "ready" : "unavailable"}, text to speech ${state.ai.speech ? "ready" : "unavailable"}, photos ${state.ai.vision ? "ready" : "unavailable"})
-${state.assetNames.length > 0 ? `- Reference files and images attached to the project: ${state.assetNames.join(", ")}. If the person attached an image in the chat, use its design, layout, content, and colors as direct reference for what they want to build or change.\n` : ""}- Current plan: ${state.plan ? `\n\`\`\`json\n${JSON.stringify({ ...state.plan, themePackage: undefined, collections: undefined, components: undefined, pendingChanges: undefined }, null, 2)}\n\`\`\`` : "none yet"}
+${assetsSection(state)}- Current plan: ${state.plan ? `\n\`\`\`json\n${JSON.stringify({ ...state.plan, themePackage: undefined, collections: undefined, components: undefined, pendingChanges: undefined }, null, 2)}\n\`\`\`` : "none yet"}
 ${state.plan?.collections ? `- Data the ${product} stores: ${state.plan.collections.map((c) => `${c.name} (${c.fields.map((f) => f.name).join(", ")})`).join("; ") || "nothing yet"}\n` : ""}${state.plan?.components?.length ? `- Shared components: ${state.plan.components.map((c) => componentDescription(c, state.rows)).join("; ")}\n` : ""}${state.plan?.themePackage ? `- Themes: ${state.plan.themePackage.themes.map((t) => `${t.name} (id "${t.id}", ${t.mode}${t.id === state.plan?.themePackage?.activeThemeId ? ", active" : ""})`).join("; ")}\n` : ""}
 # What to act on
 - Do only what the person's latest message asks. Earlier messages are background for understanding it, and what they asked for has already been dealt with, so never do it again or carry it into this change. Two exceptions: (1) if the latest message approves a \`<change-plan>\` from the immediately preceding assistant message, execute every item of that change plan now with \`update_app\`${isHtml ? "" : " or \`set_theme\`"}; (2) if the latest message says they turned AI on, the app was built without it, so that earlier feature still needs wiring — read the current plan and add the AI.
@@ -249,11 +260,14 @@ Common cases (suggest these without waiting to be asked):
 What to do:
 1. While planning (after \`propose_plan\`), add a short "- " bullet that names what needs a key, why (e.g. realtime weather), and that CloudHike covers accounts/storage but not that live feed.
 2. Give a plain **get-the-key guide** in chat (no tool names): which site to open, that they sign up / create an app or key, copy the key, then click **Keys** at the top of the workspace and paste it (never in chat). Include the provider's docs or signup URL when you know a good default.
-3. Call \`list_secret_names\`. If the key is missing, call \`request_secret\` with an uppercase name like \`OPENWEATHER_API_KEY\` and a short label so the Keys dialog opens. If they already stored it, say so and wire the screens.
-4. Until the key is stored, build the ${product} with clear empty/demo states and say live data will work once they add the key — don't invent fake "live" numbers as if they came from the API.
-5. After it's stored, wire screens with \`callExternalApi\` from \`@/lib/external\`. Never put keys in screen code, fetch headers, or process.env. Never ask them to paste a key in chat. Never accept a raw key as a tool argument.
+3. Call \`fetch_docs\` on the provider's official docs URL before inventing endpoints or auth (e.g. https://openweathermap.org/current). Use the known recipes below when they match.
+4. Call \`list_secret_names\`. If the key is missing, call \`request_secret\` with an uppercase name like \`OPENWEATHER_API_KEY\` and a short label so the Keys dialog opens. If they already stored it, say so and wire the screens with \`update_app\`.
+5. Until the key is stored, build the ${product} with clear empty/demo states and say live data will work once they add the key — don't invent fake "live" numbers as if they came from the API.
+6. After it's stored, wire screens with \`callExternalApi\` from \`@/lib/external\` via \`update_app\`. Never put keys in screen code, fetch headers, or process.env. Never ask them to paste a key in chat. Never accept a raw key as a tool argument.
 
 Do **not** request external keys for features CloudHike already covers (saving their own data, sign-in, uploads, email-to-self).
+
+${API_RECIPES_DOC}
 
 ${isHtml ? `# AI features\nThis website is HTML only, so it cannot use askAi, speakText, transcribeAudio, or analyzeImage. If they ask for a chatbot, speech, or photo understanding, say website v2 can't do that yet.\n` : aiPlannerSection(state.ai)}
 ${isWeb ? webPlanningRules(screenTarget, maxScreens) : mobilePlanningRules(screenTarget, maxScreens)}
@@ -365,8 +379,8 @@ const SAMPLE_IMAGE_RULE = isImageKitEnabled()
   : `Images are urls of the form "https://picsum.photos/seed/<word>/400/300".`
 
 const SCREEN_IMAGE_RULE = isImageKitEnabled()
-  ? `Images in this app come from ImageKit. Use image urls from the records, and for any other image write ImageKit's generation url, of the form \`{ uri: "${GENERATED_IMAGE_URL}" }\`, such as \`{ uri: "${GENERATED_IMAGE_EXAMPLE}" }\`. ${GENERATED_IMAGE_WRITING}. Write the url as one plain string in the code, not built from parts, and never use picsum, other image sites, or local assets. Describe a real picture without any text in it, and use at most 4 on a screen.`
-  : `Use images only via \`{ uri: "https://picsum.photos/seed/<word>/400/300" }\`, or image urls from the records, never local assets.`
+  ? `Default photographs use ImageKit generation urls of the form \`{ uri: "${GENERATED_IMAGE_URL}" }\`, such as \`{ uri: "${GENERATED_IMAGE_EXAMPLE}" }\`. ${GENERATED_IMAGE_WRITING}. Write that url as one plain string. Exception: when the person uploaded a photo or pasted an https image URL to use in the UI (hero, avatar, gallery), put that exact https URL (or data URL) in \`{ uri: "..." }\` — never replace their photo with a new ImageKit generation url. Prefer record image urls when showing collection data. At most 4 generated ImageKit images on a screen besides user-supplied ones.`
+  : `Use images via \`{ uri: "https://picsum.photos/seed/<word>/400/300" }\`, record image urls, or — when the person supplied a photo/URL — that exact https URL in \`{ uri: "..." }\`. Never local require() assets.`
 
 const COMPONENT_IMAGE_RULE = isImageKitEnabled()
   ? `Take images as props. If a component always shows the same image, write ImageKit's generation url as one plain string, of the form "${GENERATED_IMAGE_URL}". ${GENERATED_IMAGE_WRITING}.`
@@ -623,8 +637,10 @@ ${AI_BUILDER_RULES}
 # External APIs
 When this screen needs a third-party HTTPS API and a key name is listed in the request, call it only through Dreamera:
 - \`import { callExternalApi } from "@/lib/external"\`
-- \`const result = await callExternalApi({ secretName: "OPENWEATHER_API_KEY", url: "https://api.example.com/…", method: "GET", auth: { type: "bearer" } })\`
+- \`const result = await callExternalApi({ secretName: "OPENWEATHER_API_KEY", url: "…", method: "GET", auth: { type: "query", name: "appid" } })\`
 - \`auth\` may be \`{ type: "bearer" }\`, \`{ type: "header", name: "x-api-key" }\`, or \`{ type: "query", name: "appid" }\`.
+- ${API_RECIPES_BUILDER}
+- If the proxy returns \`data.dataUrl\`, show it with \`Image\` / \`{ uri: data.dataUrl }\`. For JSON base64 fields, build a data URI. Do not invent "image too large" errors; only show thrown \`error.message\`.
 - Never write an API key, Authorization header value, or process.env. Wrap in try/catch and show \`error.message\` inline.
 
 # Everything works
@@ -660,7 +676,7 @@ This must look like a top-tier app on the App Store, down to the smallest detail
 - Spacing on an 8-point grid with aligned edges and even gaps. Rounded cards (12 to 20 radius) with consistent radii, and soft shadows or hairline borders, never both heavy.
 - Considered details: icons in tinted rounded containers, chips and badges with soft tokens, progress indicators, avatars, and numbers given proper emphasis. Group related things in cards rather than leaving them floating.
 - Every touchable shows feedback: use \`Pressable\` with \`style={({ pressed }) => [...]}\` for a pressed state. Selected and disabled states are clearly different.
-- ${SCREEN_IMAGE_RULE} When changing a screen, keep every other image url already in it exactly as it is, since the person may have chosen or made that image themselves.
+- ${SCREEN_IMAGE_RULE} When changing a screen, keep every other image url already in it exactly as it is, unless the person asked to replace a specific image (hero, avatar, etc.) — then change only that one's uri/src to their uploaded or pasted https URL.
 - Add \`accessibilityLabel\` to icon-only buttons and \`accessibilityRole\` to touchable elements. Touch targets are at least 44 points.
 - Follow the screen's purpose and key elements closely. Every key element must appear.`
 
@@ -684,7 +700,7 @@ The plan's style names one preset. Use only that preset. Colors still come only 
 - Set \`fontFamily\` on text. Heading and body families are named in the plan: Fredoka, Nunito, Playfair Display, Inter, Anton, Great Vibes, Outfit, Instrument Serif, Plus Jakarta Sans, Cormorant Garamond, or Jost. A hero headline uses \`layout.heroSize\` (40 on a phone, 72 on a desktop), line height about 1.02, letter spacing slightly tight, weight 700. A section heading uses \`layout.titleSize\`. Body is 16 to 18 with line height 26. An eyebrow is 12, uppercase, letter spacing wide, in \`colors.primary\`.
 - One word of a headline, or its second line, uses \`colors.primary\` or \`colors.textMuted\` inside a nested \`Text\`. Buttons are pills, radius 999, height 48 to 56, horizontal padding 28. The primary one is filled with \`colors.primary\` and \`colors.onPrimary\`. The second is outlined or a text link. Cards use radius 24 and either a soft shadow or a hairline, not both.
 - Use at least two of these, built with \`position: "absolute"\`, a negative \`marginTop\`, or a nested \`Text\`: the hero image overlaps the next section; text sits behind and in front of the subject; one to three floating cards (a stat, a rating, a feature chip) sit on the hero image; a giant faded word sits behind a title at low opacity; sections alternate \`colors.background\` and \`colors.surface\`; a status pill has a small green dot; one card in a row is filled with \`colors.primary\` and the others are quiet.
-- Photographs are of the real subject: overhead or 45-degree food and products, people cropped in a circle or overlapping a color shape, interiors and landscapes full-bleed. A home page may use up to 8. ${SCREEN_IMAGE_RULE} When changing a page, keep every other image url already in it exactly as it is.
+- Photographs are of the real subject: overhead or 45-degree food and products, people cropped in a circle or overlapping a color shape, interiors and landscapes full-bleed. A home page may use up to 8. ${SCREEN_IMAGE_RULE} When changing a page, keep every other image url already in it exactly as it is, unless they asked to replace a specific photo — then set that Image uri to their exact uploaded/pasted https URL.
 - Every touchable is a \`Pressable\` with a pressed state. Add \`accessibilityLabel\` to icon-only buttons. Follow the page's key elements. Write real copy, never lorem ipsum.`
 
 function tabBarRules(plan: AppPlan, screen: PlannedScreen) {

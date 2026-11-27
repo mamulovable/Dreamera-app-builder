@@ -27,6 +27,7 @@ import { BACKEND_SERVICES } from "@/lib/backend-protocol"
 import { screenLimitMessage } from "@/lib/billing/credits"
 import { getBackendStatus, setUpBackend } from "@/lib/cloudhike/backend"
 import { buildCost, PLANS } from "@/lib/plans"
+import { DocsFetchError, fetchPublicDocs } from "@/lib/fetch-docs"
 import { listSecretNames, normalizeSecretName } from "@/lib/project-secrets"
 import { isHtmlWebsite, MAX_PROJECT_NAME_LENGTH } from "@/lib/projects"
 import { HEX_COLOR, themeFromDesign } from "@/lib/themes"
@@ -500,32 +501,55 @@ const requestSecret = tool<typeof requestSecretSchema, PlannerContext>({
     }
     const existing = await listSecretNames(ctx.projectId)
     if (existing.some((secret) => secret.name === normalized)) {
-      return `${normalized} is already stored. Tell the person they can replace it from Keys at the top of the workspace, then wire the screen with callExternalApi from "@/lib/external".`
+      return `${normalized} is already stored. Tell the person they can replace it from Keys at the top of the workspace, then wire the screen with callExternalApi from "@/lib/external" (and call update_app if screens aren't using it yet).`
     }
     ctx.run.emit({
       type: "secret-request",
       name: normalized,
       label: label.trim() || normalized,
     })
-    return `The API keys dialog is open for ${normalized} (${reason.trim() || "external API"}). In your reply, give a short get-the-key guide (provider site / signup / copy key / paste under Keys). Never ask them to paste it in chat. After they save it, wire screens with callExternalApi from "@/lib/external" using secretName ${normalized}.`
+    return `The API keys dialog is open for ${normalized} (${reason.trim() || "external API"}). In your reply, give a short get-the-key guide (provider site / signup / copy key / paste under Keys). Never ask them to paste it in chat. After they save it, call update_app so screens use callExternalApi from "@/lib/external" with secretName ${normalized}. Prefer fetch_docs on the provider docs before inventing endpoints.`
+  },
+})
+
+const fetchDocsSchema = z.object({
+  url: z
+    .string()
+    .describe("Full https URL of official API docs, e.g. https://openweathermap.org/current or https://openrouter.ai/docs"),
+})
+
+const fetchDocs = tool<typeof fetchDocsSchema, PlannerContext>({
+  name: "fetch_docs",
+  description:
+    "Fetch a public https documentation page and return plain text (HTML stripped). Use before wiring an unfamiliar third-party API (OpenWeather, OpenRouter, etc.) so endpoints and auth match the provider. Do not fetch login pages or paste keys.",
+  parameters: fetchDocsSchema,
+  async execute({ url }) {
+    try {
+      const docs = await fetchPublicDocs(url)
+      return `# ${docs.title}\nSource: ${docs.url}\n\n${docs.text}`
+    } catch (error) {
+      if (error instanceof DocsFetchError) return `Docs not loaded: ${error.message}`
+      console.error("fetch_docs failed", error)
+      return "Docs not loaded: something went wrong fetching that page."
+    }
   },
 })
 
 function toolsForTurn(ctx: PlannerContext) {
   if (ctx.mode === "chat") {
     const hasFiles = ctx.builtScreens > 0 || Boolean(ctx.plan?.components?.length) || Boolean(ctx.plan?.site?.css)
-    return hasFiles ? [readProjectFile, listSecretNamesTool] : [listSecretNamesTool]
+    return hasFiles ? [readProjectFile, listSecretNamesTool, fetchDocs] : [listSecretNamesTool, fetchDocs]
   }
   if (ctx.mode === "plan") {
     if (ctx.builtScreens === 0) {
       if (!ctx.plan && !ctx.justAnsweredQuestions) {
         return [askPlanQuestions]
       }
-      return ctx.plan ? [proposePlan, askPlanQuestions, confirmPlan] : [proposePlan, askPlanQuestions]
+      return ctx.plan ? [proposePlan, askPlanQuestions, confirmPlan, fetchDocs] : [proposePlan, askPlanQuestions, fetchDocs]
     }
-    return [askPlanQuestions, proposeChangePlan, readProjectFile, listSecretNamesTool, requestSecret]
+    return [askPlanQuestions, proposeChangePlan, readProjectFile, listSecretNamesTool, requestSecret, fetchDocs]
   }
-  return [proposePlan, confirmPlan, updateApp, setTheme, setupBackend, listSecretNamesTool, requestSecret]
+  return [proposePlan, confirmPlan, updateApp, setTheme, setupBackend, listSecretNamesTool, requestSecret, fetchDocs]
 }
 
 const TOOL_STATUS: Record<string, string> = {
@@ -539,6 +563,7 @@ const TOOL_STATUS: Record<string, string> = {
   read_project_file: "Inspecting project files…",
   list_secret_names: "Checking stored API keys…",
   request_secret: "Asking for an API key…",
+  fetch_docs: "Reading API documentation…",
 }
 
 function toInputItems(thread: Pick<ChatMessage, "role" | "content">[]): AgentInputItem[] {
@@ -566,22 +591,24 @@ function toInputItems(thread: Pick<ChatMessage, "role" | "content">[]): AgentInp
  * revises the plan, confirms it, or changes the built app. Streams everything
  * to `run`, saves the reply, and says what should happen next.
  */
+export type PlannerAsset = { fileName: string; url: string | null }
+
 export function runPlannerTurn(
   projectRun: ProjectRun,
   project: Project,
-  assetNames: string[],
+  assets: PlannerAsset[],
   account: PlannerState["account"]
 ) {
   return withBuilderCall(
     { projectId: project.id, userId: project.userId, kind: "planner", label: "Planner" },
-    () => planTurn(projectRun, project, assetNames, account)
+    () => planTurn(projectRun, project, assets, account)
   )
 }
 
 async function planTurn(
   projectRun: ProjectRun,
   project: Project,
-  assetNames: string[],
+  assets: PlannerAsset[],
   account: PlannerState["account"]
 ): Promise<{ confirmed: boolean; plan: AppPlan | null; changes: AppChanges | null }> {
   configureAgents()
@@ -618,7 +645,8 @@ async function planTurn(
     platform: project.platform,
     plan: project.plan,
     builtScreens: rows.filter((row) => row.code).length,
-    assetNames,
+    assetNames: assets.map((a) => a.fileName),
+    assets,
     account,
     proposedPlan: null,
     proposedQuestions: null,
